@@ -21,26 +21,6 @@
     "updatedAt": "2026-06-30T17:14:43.572Z"
   },
   {
-    "id": "1782839688496",
-    "surveyNumber": "205/3",
-    "subDivision": "B2",
-    "pattaNumber": "1102",
-    "documentNumber": "456/2025",
-    "isPattaTransferred": false,
-    "pattaNames": [
-      "Manoj Kumar"
-    ],
-    "landSize": {
-      "value": 1.25,
-      "unit": "acre"
-    },
-    "landType": "dry",
-    "purchaseDate": "2025-01-20",
-    "purchasedFrom": "L. Ganesan",
-    "createdAt": "2026-06-30T17:14:48.496Z",
-    "updatedAt": "2026-06-30T17:14:48.496Z"
-  },
-  {
     "id": "1782871155065",
     "surveyNumber": "192",
     "subDivision": "11B",
