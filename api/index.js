@@ -5,21 +5,23 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Path to records storage
-const DATA_DIR = path.join(__dirname, 'data');
+// Path to records storage (using process.cwd() for Vercel Serverless environment compatibility)
+const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'land_records.json');
 
-// Ensure data directory and file exist
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2), 'utf8');
+// Ensure data directory and file exist (only when running locally; Vercel is read-only)
+if (!process.env.VERCEL) {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(DATA_FILE)) {
+    fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2), 'utf8');
+  }
 }
 
 // Middleware
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(process.cwd(), 'public')));
 
 // Cloud Persistence Configurations
 const KV_REST_API_URL = process.env.KV_REST_API_URL;
@@ -162,7 +164,6 @@ async function writeRecords(records) {
       console.error('Error writing local records file:', error);
     }
   } else if (!success) {
-    // If on Vercel but neither KV nor GitHub is configured, local file is read-only.
     console.error('Attempted to write in production (Vercel) without KV or GitHub API configured.');
   }
 
@@ -354,4 +355,3 @@ if (require.main === module) {
     console.log(`==================================================`);
   });
 }
-
