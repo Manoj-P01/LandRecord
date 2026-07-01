@@ -1,1 +1,25 @@
-[]
+[
+  {
+    "id": "1782884248315",
+    "surveyNumber": "266",
+    "subDivision": "6A",
+    "pattaNumber": "289",
+    "documentNumber": "57/1992",
+    "isPattaTransferred": false,
+    "pattaNames": [
+      "Pappammal"
+    ],
+    "landSize": {
+      "value": 39.52,
+      "unit": "cent"
+    },
+    "landType": "dry",
+    "purchaseDate": "1992-01-27",
+    "purchasedFrom": "Balakumar",
+    "district": "",
+    "sro": "",
+    "village": "",
+    "createdAt": "2026-07-01T05:37:28.315Z",
+    "updatedAt": "2026-07-01T05:37:28.315Z"
+  }
+]
