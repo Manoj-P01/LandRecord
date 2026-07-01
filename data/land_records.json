@@ -1,26 +1,5 @@
 [
   {
-    "id": "1782839683572",
-    "surveyNumber": "104/1A",
-    "subDivision": "A1",
-    "pattaNumber": "840",
-    "documentNumber": "1204/2022",
-    "isPattaTransferred": true,
-    "pattaNames": [
-      "Manoj Kumar",
-      "K. Ramasamy"
-    ],
-    "landSize": {
-      "value": 12.5,
-      "unit": "cent"
-    },
-    "landType": "wet",
-    "purchaseDate": "2022-04-12",
-    "purchasedFrom": "S. Palanisamy",
-    "createdAt": "2026-06-30T17:14:43.572Z",
-    "updatedAt": "2026-06-30T17:14:43.572Z"
-  },
-  {
     "id": "1782871155065",
     "surveyNumber": "192",
     "subDivision": "11B",
