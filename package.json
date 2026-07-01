@@ -1,0 +1,16 @@
+{
+  "name": "land-record-manager",
+  "version": "1.0.0",
+  "description": "Local-first application to manage land purchase and patta records",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

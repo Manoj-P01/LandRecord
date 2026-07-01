@@ -1,0 +1,66 @@
+[
+  {
+    "id": "1782839683572",
+    "surveyNumber": "104/1A",
+    "subDivision": "A1",
+    "pattaNumber": "840",
+    "documentNumber": "1204/2022",
+    "isPattaTransferred": true,
+    "pattaNames": [
+      "Manoj Kumar",
+      "K. Ramasamy"
+    ],
+    "landSize": {
+      "value": 12.5,
+      "unit": "cent"
+    },
+    "landType": "wet",
+    "purchaseDate": "2022-04-12",
+    "purchasedFrom": "S. Palanisamy",
+    "createdAt": "2026-06-30T17:14:43.572Z",
+    "updatedAt": "2026-06-30T17:14:43.572Z"
+  },
+  {
+    "id": "1782839688496",
+    "surveyNumber": "205/3",
+    "subDivision": "B2",
+    "pattaNumber": "1102",
+    "documentNumber": "456/2025",
+    "isPattaTransferred": false,
+    "pattaNames": [
+      "Manoj Kumar"
+    ],
+    "landSize": {
+      "value": 1.25,
+      "unit": "acre"
+    },
+    "landType": "dry",
+    "purchaseDate": "2025-01-20",
+    "purchasedFrom": "L. Ganesan",
+    "createdAt": "2026-06-30T17:14:48.496Z",
+    "updatedAt": "2026-06-30T17:14:48.496Z"
+  },
+  {
+    "id": "1782871155065",
+    "surveyNumber": "192",
+    "subDivision": "11B",
+    "pattaNumber": "453",
+    "documentNumber": "329/2007",
+    "isPattaTransferred": false,
+    "pattaNames": [
+      "Subaiya"
+    ],
+    "landSize": {
+      "value": 25,
+      "unit": "cent"
+    },
+    "landType": "dry",
+    "purchaseDate": null,
+    "purchasedFrom": "",
+    "district": "namakkal",
+    "sro": "mohanur",
+    "village": "arur",
+    "createdAt": "2026-07-01T01:59:15.065Z",
+    "updatedAt": "2026-07-01T01:59:15.065Z"
+  }
+]
