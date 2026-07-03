@@ -30,6 +30,86 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GITHUB_REPO = process.env.GITHUB_REPO || 'Manoj-P01/LandRecord';
 const GITHUB_PATH = 'data/land_records.json';
 
+function convertToCents(value, unit) {
+  const val = parseFloat(value);
+  if (isNaN(val) || val <= 0) return 0;
+  
+  const SQFT_PER_CENT = 435.6;
+  const CENTS_PER_ACRE = 100;
+  const SQFT_PER_ARE = 1076.391;
+  
+  switch (unit) {
+    case 'cent':
+      return val;
+    case 'sqft':
+      return val / SQFT_PER_CENT;
+    case 'acre':
+      return val * CENTS_PER_ACRE;
+    case 'are':
+      return (val * SQFT_PER_ARE) / SQFT_PER_CENT;
+    default:
+      return val;
+  }
+}
+
+function resolveDocumentFallbacks(record) {
+  if (!Array.isArray(record.pattas) || record.pattas.length === 0) {
+    if (!record.pattas) record.pattas = [];
+    return record;
+  }
+
+  // Comma-joined list of patta numbers
+  const pattaNumbers = record.pattas
+    .map(p => (p.pattaNumber || '').trim())
+    .filter(Boolean);
+  record.pattaNumber = pattaNumbers.join(', ');
+
+  // Union of all patta names
+  const allPattaNames = new Set();
+  record.pattas.forEach(p => {
+    if (Array.isArray(p.pattaNames)) {
+      p.pattaNames.forEach(name => {
+        if (name && name.trim()) allPattaNames.add(name.trim());
+      });
+    }
+  });
+  record.pattaNames = Array.from(allPattaNames);
+
+  // isPattaTransferred: true if all pattas are transferred; false otherwise
+  record.isPattaTransferred = record.pattas.every(p => !!p.isPattaTransferred);
+
+  // Accumulate sizes and find first survey/subdivision/landType
+  let totalCents = 0;
+  let firstSurvey = '';
+  let firstSubdiv = '';
+  let firstType = 'dry';
+
+  record.pattas.forEach((p, pIndex) => {
+    if (Array.isArray(p.parcels)) {
+      p.parcels.forEach((parcel, parcelIndex) => {
+        if (pIndex === 0 && parcelIndex === 0) {
+          firstSurvey = (parcel.surveyNumber || '').trim();
+          firstSubdiv = (parcel.subDivision || '').trim();
+          firstType = (parcel.landType || 'dry').trim().toLowerCase();
+        }
+        if (parcel.landSize && parcel.landSize.value) {
+          totalCents += convertToCents(parcel.landSize.value, parcel.landSize.unit);
+        }
+      });
+    }
+  });
+
+  record.surveyNumber = firstSurvey;
+  record.subDivision = firstSubdiv;
+  record.landType = firstType;
+  record.landSize = {
+    value: parseFloat(totalCents.toFixed(4)),
+    unit: 'cent'
+  };
+
+  return record;
+}
+
 // Helper to read records (Async to handle external cloud DBs)
 async function readRecords() {
   // 1. Try Vercel KV (Redis) if configured
@@ -180,48 +260,99 @@ app.get('/api/records', async (req, res) => {
 // 2. Add a record
 app.post('/api/records', async (req, res) => {
   const {
-    surveyNumber,
-    subDivision,
-    pattaNumber,
     documentNumber,
-    isPattaTransferred,
-    pattaNames, // Array of strings
-    landSize,    // { value: number, unit: 'cent' | 'sqft' | 'acre' }
-    landType,    // 'wet' | 'dry' | 'residential' | 'commercial'
+    documentOwnerName,
     purchaseDate,
     purchasedFrom,
     district,
     sro,
-    village
+    village,
+    pattas,
+    notes
   } = req.body;
 
+  const docOwners = Array.isArray(documentOwnerName) ? documentOwnerName.map(name => name.trim()).filter(Boolean) : (typeof documentOwnerName === 'string' && documentOwnerName.trim() ? [documentOwnerName.trim()] : []);
+  const sellers = Array.isArray(purchasedFrom) ? purchasedFrom.map(name => name.trim()).filter(Boolean) : (typeof purchasedFrom === 'string' && purchasedFrom.trim() ? [purchasedFrom.trim()] : []);
+
+  // Parse and build hierarchical pattas list
+  let formattedPattas = [];
+  if (Array.isArray(pattas) && pattas.length > 0) {
+    formattedPattas = pattas.map(p => {
+      const pattaNames = Array.isArray(p.pattaNames) ? p.pattaNames.map(name => name.trim()).filter(Boolean) : [];
+      const parcels = Array.isArray(p.parcels) ? p.parcels.map(parcel => ({
+        surveyNumber: (parcel.surveyNumber || '').trim(),
+        subDivision: (parcel.subDivision || '').trim(),
+        landSize: {
+          value: parseFloat(parcel.landSize ? parcel.landSize.value : 0),
+          unit: (parcel.landSize ? parcel.landSize.unit : 'cent') || 'cent'
+        },
+        landType: (parcel.landType || 'dry').trim().toLowerCase()
+      })).filter(parcel => parcel.surveyNumber && parcel.landSize.value > 0) : [];
+
+      return {
+        pattaNumber: (p.pattaNumber || '').trim(),
+        isPattaTransferred: !!p.isPattaTransferred,
+        pattaNames,
+        parcels
+      };
+    }).filter(p => p.pattaNumber && p.parcels.length > 0);
+  }
+
+  // Fallback for older client format
+  if (formattedPattas.length === 0) {
+    let legacyParcels = [];
+    if (Array.isArray(req.body.parcels) && req.body.parcels.length > 0) {
+      legacyParcels = req.body.parcels.map(p => ({
+        surveyNumber: (p.surveyNumber || '').trim(),
+        subDivision: (p.subDivision || '').trim(),
+        landSize: {
+          value: parseFloat(p.landSize ? p.landSize.value : 0),
+          unit: (p.landSize ? p.landSize.unit : 'cent') || 'cent'
+        },
+        landType: (p.landType || req.body.landType || 'dry').trim().toLowerCase()
+      })).filter(p => p.surveyNumber && p.landSize.value > 0);
+    } else if (req.body.surveyNumber && req.body.landSize && req.body.landSize.value) {
+      legacyParcels = [{
+        surveyNumber: req.body.surveyNumber.trim(),
+        subDivision: (req.body.subDivision || '').trim(),
+        landSize: {
+          value: parseFloat(req.body.landSize.value),
+          unit: req.body.landSize.unit || 'cent'
+        },
+        landType: (req.body.landType || 'dry').trim().toLowerCase()
+      }];
+    }
+
+    formattedPattas = [{
+      pattaNumber: (req.body.pattaNumber || '').trim(),
+      isPattaTransferred: !!req.body.isPattaTransferred,
+      pattaNames: Array.isArray(req.body.pattaNames) ? req.body.pattaNames.map(name => name.trim()).filter(Boolean) : [],
+      parcels: legacyParcels
+    }].filter(p => p.pattaNumber && p.parcels.length > 0);
+  }
+
   // Basic validation
-  if (!surveyNumber || !pattaNumber || !documentNumber || !landSize || !landSize.value) {
-    return res.status(400).json({ error: 'Missing required fields: survey number, patta number, document number, and land size.' });
+  if (!documentNumber || docOwners.length === 0 || formattedPattas.length === 0) {
+    return res.status(400).json({ error: 'Missing required fields: document number, document owner name, and at least one valid Patta block.' });
   }
 
   const records = await readRecords();
   const newRecord = {
     id: Date.now().toString(),
-    surveyNumber: surveyNumber.trim(),
-    subDivision: (subDivision || '').trim(),
-    pattaNumber: pattaNumber.trim(),
     documentNumber: documentNumber.trim(),
-    isPattaTransferred: !!isPattaTransferred,
-    pattaNames: Array.isArray(pattaNames) ? pattaNames.map(name => name.trim()).filter(Boolean) : [],
-    landSize: {
-      value: parseFloat(landSize.value),
-      unit: landSize.unit || 'cent'
-    },
-    landType: (landType || 'dry').trim().toLowerCase(),
+    documentOwnerName: docOwners,
+    purchasedFrom: sellers,
     purchaseDate: purchaseDate || null,
-    purchasedFrom: (purchasedFrom || '').trim(),
+    pattas: formattedPattas,
     district: (district || '').trim(),
     sro: (sro || '').trim(),
     village: (village || '').trim(),
+    notes: (notes || '').trim(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
+
+  resolveDocumentFallbacks(newRecord);
 
   records.push(newRecord);
   if (await writeRecords(records)) {
@@ -235,19 +366,15 @@ app.post('/api/records', async (req, res) => {
 app.put('/api/records/:id', async (req, res) => {
   const { id } = req.params;
   const {
-    surveyNumber,
-    subDivision,
-    pattaNumber,
     documentNumber,
-    isPattaTransferred,
-    pattaNames,
-    landSize,
-    landType,
+    documentOwnerName,
     purchaseDate,
     purchasedFrom,
     district,
     sro,
-    village
+    village,
+    pattas,
+    notes
   } = req.body;
 
   const records = await readRecords();
@@ -259,26 +386,45 @@ app.put('/api/records/:id', async (req, res) => {
 
   // Update properties if provided
   const record = records[index];
-  if (surveyNumber !== undefined) record.surveyNumber = surveyNumber.trim();
-  if (subDivision !== undefined) record.subDivision = (subDivision || '').trim();
-  if (pattaNumber !== undefined) record.pattaNumber = pattaNumber.trim();
+
   if (documentNumber !== undefined) record.documentNumber = documentNumber.trim();
-  if (isPattaTransferred !== undefined) record.isPattaTransferred = !!isPattaTransferred;
-  if (pattaNames !== undefined) {
-    record.pattaNames = Array.isArray(pattaNames) ? pattaNames.map(name => name.trim()).filter(Boolean) : [];
+  if (documentOwnerName !== undefined) {
+    record.documentOwnerName = Array.isArray(documentOwnerName) ? documentOwnerName.map(name => name.trim()).filter(Boolean) : (typeof documentOwnerName === 'string' && documentOwnerName.trim() ? [documentOwnerName.trim()] : []);
   }
-  if (landSize !== undefined) {
-    record.landSize = {
-      value: parseFloat(landSize.value),
-      unit: landSize.unit || 'cent'
-    };
-  }
-  if (landType !== undefined) record.landType = landType.trim().toLowerCase();
   if (purchaseDate !== undefined) record.purchaseDate = purchaseDate || null;
-  if (purchasedFrom !== undefined) record.purchasedFrom = (purchasedFrom || '').trim();
+  if (purchasedFrom !== undefined) {
+    record.purchasedFrom = Array.isArray(purchasedFrom) ? purchasedFrom.map(name => name.trim()).filter(Boolean) : (typeof purchasedFrom === 'string' && purchasedFrom.trim() ? [purchasedFrom.trim()] : []);
+  }
   if (district !== undefined) record.district = (district || '').trim();
   if (sro !== undefined) record.sro = (sro || '').trim();
   if (village !== undefined) record.village = (village || '').trim();
+  if (notes !== undefined) record.notes = (notes || '').trim();
+
+  if (pattas !== undefined && Array.isArray(pattas)) {
+    const formattedPattas = pattas.map(p => {
+      const pattaNames = Array.isArray(p.pattaNames) ? p.pattaNames.map(name => name.trim()).filter(Boolean) : [];
+      const parcels = Array.isArray(p.parcels) ? p.parcels.map(parcel => ({
+        surveyNumber: (parcel.surveyNumber || '').trim(),
+        subDivision: (parcel.subDivision || '').trim(),
+        landSize: {
+          value: parseFloat(parcel.landSize ? parcel.landSize.value : 0),
+          unit: (parcel.landSize ? parcel.landSize.unit : 'cent') || 'cent'
+        },
+        landType: (parcel.landType || 'dry').trim().toLowerCase()
+      })).filter(parcel => parcel.surveyNumber && parcel.landSize.value > 0) : [];
+
+      return {
+        pattaNumber: (p.pattaNumber || '').trim(),
+        isPattaTransferred: !!p.isPattaTransferred,
+        pattaNames,
+        parcels
+      };
+    }).filter(p => p.pattaNumber && p.parcels.length > 0);
+
+    record.pattas = formattedPattas;
+  }
+
+  resolveDocumentFallbacks(record);
   record.updatedAt = new Date().toISOString();
 
   if (await writeRecords(records)) {
@@ -314,27 +460,67 @@ app.post('/api/records/import', async (req, res) => {
   }
 
   // Format records to ensure uniform structure
-  const formattedRecords = records.map((r, index) => ({
-    id: r.id || (Date.now() + index).toString(),
-    surveyNumber: (r.surveyNumber || '').trim(),
-    subDivision: (r.subDivision || '').trim(),
-    pattaNumber: (r.pattaNumber || '').trim(),
-    documentNumber: (r.documentNumber || '').trim(),
-    isPattaTransferred: !!r.isPattaTransferred,
-    pattaNames: Array.isArray(r.pattaNames) ? r.pattaNames.map(name => name.trim()).filter(Boolean) : [],
-    landSize: {
+  const formattedRecords = records.map((r, index) => {
+    let recordParcels = [];
+    if (Array.isArray(r.parcels) && r.parcels.length > 0) {
+      recordParcels = r.parcels.map(p => ({
+        surveyNumber: (p.surveyNumber || '').trim(),
+        subDivision: (p.subDivision || '').trim(),
+        landSize: {
+          value: parseFloat(p.landSize ? p.landSize.value : 0),
+          unit: (p.landSize ? p.landSize.unit : 'cent') || 'cent'
+        }
+      })).filter(p => p.surveyNumber && p.landSize.value > 0);
+    }
+
+    // Legacy fallback
+    if (recordParcels.length === 0) {
+      recordParcels = [{
+        surveyNumber: (r.surveyNumber || '').trim(),
+        subDivision: (r.subDivision || '').trim(),
+        landSize: {
+          value: parseFloat(r.landSize ? r.landSize.value : 0),
+          unit: (r.landSize ? r.landSize.unit : 'cent') || 'cent'
+        }
+      }].filter(p => p.surveyNumber);
+    }
+
+    // Cumulative size calculation
+    let totalCents = 0;
+    recordParcels.forEach(p => {
+      totalCents += convertToCents(p.landSize.value, p.landSize.unit);
+    });
+
+    const finalLandSize = totalCents > 0 ? {
+      value: parseFloat(totalCents.toFixed(4)),
+      unit: 'cent'
+    } : {
       value: parseFloat(r.landSize ? r.landSize.value : 0),
       unit: (r.landSize ? r.landSize.unit : 'cent') || 'cent'
-    },
-    landType: (r.landType || 'dry').trim().toLowerCase(),
-    purchaseDate: r.purchaseDate || null,
-    purchasedFrom: (r.purchasedFrom || '').trim(),
-    district: (r.district || '').trim(),
-    sro: (r.sro || '').trim(),
-    village: (r.village || '').trim(),
-    createdAt: r.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }));
+    };
+
+    return {
+      id: r.id || (Date.now() + index).toString(),
+      surveyNumber: recordParcels.length > 0 ? recordParcels[0].surveyNumber : (r.surveyNumber || '').trim(),
+      subDivision: recordParcels.length > 0 ? recordParcels[0].subDivision : (r.subDivision || '').trim(),
+      pattaNumber: (r.pattaNumber || '').trim(),
+      documentNumber: (r.documentNumber || '').trim(),
+      isPattaTransferred: !!r.isPattaTransferred,
+      documentOwnerName: Array.isArray(r.documentOwnerName) ? r.documentOwnerName.map(name => name.trim()).filter(Boolean) : (typeof r.documentOwnerName === 'string' && r.documentOwnerName.trim() ? [r.documentOwnerName.trim()] : []),
+      pattaNames: Array.isArray(r.pattaNames) ? r.pattaNames.map(name => name.trim()).filter(Boolean) : [],
+      landSize: finalLandSize,
+      parcels: recordParcels,
+      landType: (r.landType || 'dry').trim().toLowerCase(),
+      purchaseDate: r.purchaseDate || null,
+      purchasedFrom: Array.isArray(r.purchasedFrom) ? r.purchasedFrom.map(name => name.trim()).filter(Boolean) : (typeof r.purchasedFrom === 'string' && r.purchasedFrom.trim() ? [r.purchasedFrom.trim()] : []),
+      district: (r.district || '').trim(),
+      sro: (r.sro || '').trim(),
+      village: (r.village || '').trim(),
+      notes: (r.notes || '').trim(),
+      createdAt: r.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  });
 
   if (await writeRecords(formattedRecords)) {
     res.json({ message: 'Backup restored successfully.', count: formattedRecords.length });

@@ -25,14 +25,21 @@ const cancelFormBtn = document.getElementById('cancelFormBtn');
 const deleteRecordBtn = document.getElementById('deleteRecordBtn');
 const saveRecordBtn = document.getElementById('saveRecordBtn');
 const recordForm = document.getElementById('recordForm');
-const pattaNamesContainer = document.getElementById('pattaNamesContainer');
-const addNameRowBtn = document.getElementById('addNameRowBtn');
+const purchasedFromContainer = document.getElementById('purchasedFromContainer');
+const addPurchasedFromRowBtn = document.getElementById('addPurchasedFromRowBtn');
+const docOwnersContainer = document.getElementById('docOwnersContainer');
+const addDocOwnerRowBtn = document.getElementById('addDocOwnerRowBtn');
+const editRecordBtn = document.getElementById('editRecordBtn');
+const pattasContainer = document.getElementById('pattasContainer');
+const addPattaBtn = document.getElementById('addPattaBtn');
+const notesTextarea = document.getElementById('notes');
 
 const landSizeValue = document.getElementById('landSizeValue');
 const unitConversionPreview = document.getElementById('unitConversionPreview');
 const convCent = document.getElementById('convCent');
 const convSqft = document.getElementById('convSqft');
 const convAcre = document.getElementById('convAcre');
+const convAre = document.getElementById('convAre');
 
 const isPattaTransferred = document.getElementById('isPattaTransferred');
 const pattaStatusDescription = document.getElementById('pattaStatusDescription');
@@ -90,16 +97,18 @@ let activeDeleteId = null;
 const SQFT_PER_CENT = 435.6;
 const CENTS_PER_ACRE = 100;
 const SQFT_PER_ACRE = 43560;
+const SQFT_PER_ARE = 1076.391;
 
 // Convert size from a baseline unit to others
 function convertUnits(value, fromUnit) {
   let cents = 0;
   let sqft = 0;
   let acres = 0;
+  let ares = 0;
   const val = parseFloat(value);
 
   if (isNaN(val) || val <= 0) {
-    return { cents: 0, sqft: 0, acres: 0 };
+    return { cents: 0, sqft: 0, acres: 0, ares: 0 };
   }
 
   switch (fromUnit) {
@@ -107,19 +116,28 @@ function convertUnits(value, fromUnit) {
       cents = val;
       sqft = val * SQFT_PER_CENT;
       acres = val / CENTS_PER_ACRE;
+      ares = sqft / SQFT_PER_ARE;
       break;
     case 'sqft':
       cents = val / SQFT_PER_CENT;
       sqft = val;
       acres = val / SQFT_PER_ACRE;
+      ares = val / SQFT_PER_ARE;
       break;
     case 'acre':
       cents = val * CENTS_PER_ACRE;
       sqft = val * SQFT_PER_ACRE;
       acres = val;
+      ares = sqft / SQFT_PER_ARE;
+      break;
+    case 'are':
+      cents = (val * SQFT_PER_ARE) / SQFT_PER_CENT;
+      sqft = val * SQFT_PER_ARE;
+      acres = (val * SQFT_PER_ARE) / SQFT_PER_ACRE;
+      ares = val;
       break;
   }
-  return { cents, sqft, acres };
+  return { cents, sqft, acres, ares };
 }
 
 // Convert from records storage unit to target display unit
@@ -135,12 +153,14 @@ function getDisplayValue(sizeObj, targetUnit) {
       return conversions.sqft;
     case 'acre':
       return conversions.acres;
+    case 'are':
+      return conversions.ares;
   }
 }
 
 // Formats display sizes nicely
 function formatSizeDisplay(value, unit) {
-  const rounded = unit === 'sqft' ? Math.round(value) : value.toFixed(3);
+  const rounded = unit === 'sqft' ? Math.round(value) : (unit === 'acre' || unit === 'are' ? value.toFixed(4) : value.toFixed(3));
   const formattedVal = Number(rounded).toLocaleString(undefined, {
     minimumFractionDigits: unit === 'sqft' ? 0 : 2,
     maximumFractionDigits: unit === 'sqft' ? 0 : 4
@@ -149,7 +169,8 @@ function formatSizeDisplay(value, unit) {
   const labels = {
     cent: 'Cent',
     sqft: 'Sq Ft',
-    acre: 'Acre'
+    acre: 'Acre',
+    are: 'Are'
   };
 
   return `${formattedVal} ${labels[unit]}`;
@@ -207,38 +228,246 @@ function showToast(message, type = 'success') {
 }
 
 // -------------------------------------------------------------
-// Dynamic Patta Names Management
+// Dynamic Names Management
 // -------------------------------------------------------------
-function addNameInputRow(value = '') {
+function addDynamicNameRow(container, inputClass, placeholder, value = '', isRequired = false, minRows = 0, requiredMsg = '') {
   const row = document.createElement('div');
   row.className = 'name-row';
   row.innerHTML = `
-    <input type="text" class="patta-name-input" placeholder="e.g., S. Vignesh" value="${value}">
-    <button type="button" class="remove-name-btn" aria-label="Remove Owner">&times;</button>
+    <input type="text" class="${inputClass}" placeholder="${placeholder}" value="${value}">
+    <button type="button" class="remove-name-btn" aria-label="Remove Row">&times;</button>
   `;
 
-  pattaNamesContainer.appendChild(row);
+  container.appendChild(row);
 
   const removeBtn = row.querySelector('.remove-name-btn');
   removeBtn.addEventListener('click', () => {
-    const rows = pattaNamesContainer.querySelectorAll('.name-row');
-    if (rows.length > 1) {
+    const rows = container.querySelectorAll('.name-row');
+    if (rows.length > minRows) {
       row.remove();
+    } else if (isRequired) {
+      showToast(requiredMsg || 'At least one name is required.', 'error');
     } else {
-      showToast('At least one owner is required.', 'error');
+      row.remove();
     }
   });
 }
 
-addNameRowBtn.addEventListener('click', () => addNameInputRow());
+addDocOwnerRowBtn.addEventListener('click', () => {
+  addDynamicNameRow(docOwnersContainer, 'doc-owner-name-input', 'e.g., Manoj Kumar', '', true, 1, 'At least one document owner is required.');
+});
+
+addPurchasedFromRowBtn.addEventListener('click', () => {
+  addDynamicNameRow(purchasedFromContainer, 'purchased-from-input', 'e.g., L. Ganesan', '', false, 0);
+});
 
 // Initialize name row inside drawer
-function resetNameInputs(names = []) {
-  pattaNamesContainer.innerHTML = '';
-  if (names.length === 0) {
-    addNameInputRow();
+function resetDocumentInputs(docOwners = [], sellers = []) {
+  docOwnersContainer.innerHTML = '';
+  purchasedFromContainer.innerHTML = '';
+
+  if (docOwners.length === 0) {
+    addDynamicNameRow(docOwnersContainer, 'doc-owner-name-input', 'e.g., Manoj Kumar', '', true, 1, 'At least one document owner is required.');
   } else {
-    names.forEach(name => addNameInputRow(name));
+    docOwners.forEach(name => {
+      addDynamicNameRow(docOwnersContainer, 'doc-owner-name-input', 'e.g., Manoj Kumar', name, true, 1, 'At least one document owner is required.');
+    });
+  }
+
+  if (sellers.length === 0) {
+    addDynamicNameRow(purchasedFromContainer, 'purchased-from-input', 'e.g., L. Ganesan', '', false, 0);
+  } else {
+    sellers.forEach(name => {
+      addDynamicNameRow(purchasedFromContainer, 'purchased-from-input', 'e.g., L. Ganesan', name, false, 0);
+    });
+  }
+}
+
+// -------------------------------------------------------------
+// Hierarchical Pattas & Parcels Management
+// -------------------------------------------------------------
+function addPattaInputBlock(pattaNumber = '', isPattaTransferred = false, pattaNames = [], parcels = []) {
+  const block = document.createElement('div');
+  block.className = 'patta-block';
+  block.innerHTML = `
+    <div class="patta-block-header">
+      <div class="patta-block-header-inputs">
+        <div class="form-group" style="flex-grow: 1; min-width: 150px;">
+          <label style="font-size: 0.8rem; text-transform: uppercase;">Patta Number *</label>
+          <input type="text" class="patta-number-input" placeholder="e.g., 840" value="${pattaNumber}" required>
+        </div>
+        <div class="form-group" style="min-width: 250px;">
+          <div class="toggle-container" style="margin-top: 20px;">
+            <div class="toggle-text">
+              <span class="toggle-title" style="font-size: 0.85rem;">Patta Status</span>
+              <span class="toggle-desc patta-status-desc-label" style="font-size: 0.75rem; color: ${isPattaTransferred ? 'var(--success)' : 'var(--text-muted)'};">
+                ${isPattaTransferred ? 'Transferred (Completed)' : 'Pending Transfer'}
+              </span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" class="patta-status-checkbox" ${isPattaTransferred ? 'checked' : ''}>
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="remove-patta-btn" aria-label="Remove Patta">&times;</button>
+    </div>
+
+    <!-- Patta Owners Section -->
+    <div class="form-group patta-owners-box">
+      <label style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted);">Patta Names (Owners) *</label>
+      <div class="patta-owners-container"></div>
+      <button type="button" class="btn btn-outline-dashed btn-sm add-patta-owner-btn" style="width: max-content;">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 12px; height: 12px; margin-right: 4px;"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        Add Owner Name
+      </button>
+    </div>
+
+    <!-- Patta Parcels Section -->
+    <div class="form-group patta-parcels-box">
+      <label style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted);">Land Parcels under this Patta *</label>
+      
+      <div class="parcels-header hide-on-mobile" style="display: grid; grid-template-columns: 2fr 1.5fr 2fr 1.8fr 2.2fr 36px; gap: 12px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; padding: 0 4px; margin-bottom: 4px; margin-top: 8px;">
+        <div>Survey No *</div>
+        <div>Subdivision</div>
+        <div>Size *</div>
+        <div>Unit</div>
+        <div>Type</div>
+        <div></div>
+      </div>
+
+      <div class="patta-parcels-container"></div>
+      
+      <button type="button" class="btn btn-outline-dashed btn-sm add-patta-parcel-btn" style="width: max-content; margin-top: 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 12px; height: 12px; margin-right: 4px;"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        Add Land Parcel
+      </button>
+    </div>
+  `;
+
+  pattasContainer.appendChild(block);
+
+  const ownersContainer = block.querySelector('.patta-owners-container');
+  const parcelsContainer = block.querySelector('.patta-parcels-container');
+  const addOwnerBtn = block.querySelector('.add-patta-owner-btn');
+  const addParcelBtn = block.querySelector('.add-patta-parcel-btn');
+  const removeBlockBtn = block.querySelector('.remove-patta-btn');
+  const statusCheckbox = block.querySelector('.patta-status-checkbox');
+  const statusDescLabel = block.querySelector('.patta-status-desc-label');
+
+  // Hook up Status Switch Change Listener
+  statusCheckbox.addEventListener('change', () => {
+    if (statusCheckbox.checked) {
+      statusDescLabel.innerText = 'Transferred (Completed)';
+      statusDescLabel.style.color = 'var(--success)';
+    } else {
+      statusDescLabel.innerText = 'Pending Transfer';
+      statusDescLabel.style.color = 'var(--text-muted)';
+    }
+  });
+
+  // Hook up Add Owner Button
+  addOwnerBtn.addEventListener('click', () => {
+    addDynamicNameRow(ownersContainer, 'patta-name-input', 'e.g., K. Ramasamy', '', true, 1, 'At least one patta owner is required.');
+  });
+
+  // Hook up Add Parcel Button
+  addParcelBtn.addEventListener('click', () => {
+    addParcelInputRow(parcelsContainer);
+  });
+
+  // Hook up Remove Patta Block Button
+  removeBlockBtn.addEventListener('click', () => {
+    const blocks = pattasContainer.querySelectorAll('.patta-block');
+    if (blocks.length > 1) {
+      block.remove();
+      handleLiveConversion();
+    } else {
+      showToast('At least one Patta Record is required.', 'error');
+    }
+  });
+
+  // Populate dynamic owners list
+  if (pattaNames.length === 0) {
+    addDynamicNameRow(ownersContainer, 'patta-name-input', 'e.g., K. Ramasamy', '', true, 1, 'At least one patta owner is required.');
+  } else {
+    pattaNames.forEach(name => {
+      addDynamicNameRow(ownersContainer, 'patta-name-input', 'e.g., K. Ramasamy', name, true, 1, 'At least one patta owner is required.');
+    });
+  }
+
+  // Populate dynamic parcels list
+  if (parcels.length === 0) {
+    addParcelInputRow(parcelsContainer);
+  } else {
+    parcels.forEach(p => {
+      addParcelInputRow(parcelsContainer, p.surveyNumber, p.subDivision, p.landSize.value, p.landSize.unit, p.landType);
+    });
+  }
+}
+
+function addParcelInputRow(container, survey = '', subdiv = '', size = '', unit = 'cent', type = 'dry') {
+  const row = document.createElement('div');
+  row.className = 'parcel-row';
+  row.innerHTML = `
+    <div class="form-group">
+      <input type="text" class="parcel-survey-input" placeholder="Survey No" value="${survey}" required>
+    </div>
+    <div class="form-group">
+      <input type="text" class="parcel-subdiv-input" placeholder="Subdivision" value="${subdiv}">
+    </div>
+    <div class="form-group">
+      <input type="number" class="parcel-size-input" placeholder="Size" step="any" min="0.0001" value="${size}" required>
+    </div>
+    <div class="form-group">
+      <select class="select-input parcel-unit-input">
+        <option value="cent" ${unit === 'cent' ? 'selected' : ''}>Cent</option>
+        <option value="sqft" ${unit === 'sqft' ? 'selected' : ''}>Sq Ft</option>
+        <option value="acre" ${unit === 'acre' ? 'selected' : ''}>Acre</option>
+        <option value="are" ${unit === 'are' ? 'selected' : ''}>Are</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <select class="select-input parcel-type-input">
+        <option value="wet" ${type === 'wet' ? 'selected' : ''}>Wet (Nanjai)</option>
+        <option value="dry" ${type === 'dry' ? 'selected' : ''}>Dry (Punjai)</option>
+        <option value="residential" ${type === 'residential' ? 'selected' : ''}>Resi (Manai)</option>
+        <option value="commercial" ${type === 'commercial' ? 'selected' : ''}>Commercial</option>
+        <option value="well" ${type === 'well' ? 'selected' : ''}>Well (Kenaru)</option>
+      </select>
+    </div>
+    <button type="button" class="remove-parcel-btn" aria-label="Remove Parcel">&times;</button>
+  `;
+
+  container.appendChild(row);
+
+  const removeBtn = row.querySelector('.remove-parcel-btn');
+  removeBtn.addEventListener('click', () => {
+    const rows = container.querySelectorAll('.parcel-row');
+    if (rows.length > 1) {
+      row.remove();
+      handleLiveConversion();
+    } else {
+      showToast('At least one land parcel is required in this Patta.', 'error');
+    }
+  });
+
+  // Attach change listeners to size and unit inputs
+  row.querySelector('.parcel-size-input').addEventListener('input', handleLiveConversion);
+  row.querySelector('.parcel-unit-input').addEventListener('change', handleLiveConversion);
+}
+
+addPattaBtn.addEventListener('click', () => addPattaInputBlock());
+
+function resetPattaInputs(pattas = []) {
+  pattasContainer.innerHTML = '';
+  if (pattas.length === 0) {
+    addPattaInputBlock();
+  } else {
+    pattas.forEach(p => {
+      addPattaInputBlock(p.pattaNumber, p.isPattaTransferred, p.pattaNames, p.parcels);
+    });
   }
 }
 
@@ -246,39 +475,100 @@ function resetNameInputs(names = []) {
 // Live Unit Conversions
 // -------------------------------------------------------------
 function handleLiveConversion() {
-  const val = parseFloat(landSizeValue.value);
-  const selectedUnit = document.querySelector('input[name="landSizeUnit"]:checked').value;
+  let totalCents = 0;
+  const rows = pattasContainer.querySelectorAll('.parcel-row');
+  let hasValidSize = false;
+  
+  rows.forEach(row => {
+    const sizeInput = row.querySelector('.parcel-size-input');
+    const unitInput = row.querySelector('.parcel-unit-input');
+    if (sizeInput && unitInput) {
+      const val = parseFloat(sizeInput.value);
+      const unit = unitInput.value;
+      if (!isNaN(val) && val > 0) {
+        hasValidSize = true;
+        const conv = convertUnits(val, unit);
+        totalCents += conv.cents;
+      }
+    }
+  });
 
-  if (isNaN(val) || val <= 0) {
+  if (!hasValidSize) {
     unitConversionPreview.classList.add('hidden');
     return;
   }
 
   unitConversionPreview.classList.remove('hidden');
-  const results = convertUnits(val, selectedUnit);
+  const results = convertUnits(totalCents, 'cent');
 
   convCent.innerText = results.cents.toLocaleString(undefined, { maximumFractionDigits: 2 });
   convSqft.innerText = Math.round(results.sqft).toLocaleString();
   convAcre.innerText = results.acres.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  convAre.innerText = results.ares.toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
-
-landSizeValue.addEventListener('input', handleLiveConversion);
-document.querySelectorAll('input[name="landSizeUnit"]').forEach(radio => {
-  radio.addEventListener('change', handleLiveConversion);
-});
 
 // -------------------------------------------------------------
 // Toggle Switch State Watcher
 // -------------------------------------------------------------
-isPattaTransferred.addEventListener('change', () => {
-  if (isPattaTransferred.checked) {
-    pattaStatusDescription.innerText = 'Patta is fully transferred (Completed)';
-    pattaStatusDescription.style.color = 'var(--success)';
+// -------------------------------------------------------------
+// Drawer Controller
+// -------------------------------------------------------------
+function toggleFormEditable(editable) {
+  const inputs = recordForm.querySelectorAll('input, select, textarea');
+  inputs.forEach(input => {
+    if (input.type === 'hidden') return;
+    input.disabled = !editable;
+  });
+
+  // Disable/enable unit selector interactions
+  document.querySelectorAll('.unit-selector label').forEach(lbl => {
+    lbl.style.pointerEvents = editable ? 'auto' : 'none';
+  });
+
+  // Toggle dynamic add buttons
+  addDocOwnerRowBtn.style.display = editable ? 'inline-flex' : 'none';
+  addPurchasedFromRowBtn.style.display = editable ? 'inline-flex' : 'none';
+  addPattaBtn.style.display = editable ? 'inline-flex' : 'none';
+
+  document.querySelectorAll('.add-patta-owner-btn').forEach(btn => {
+    btn.style.display = editable ? 'inline-flex' : 'none';
+  });
+  document.querySelectorAll('.add-patta-parcel-btn').forEach(btn => {
+    btn.style.display = editable ? 'inline-flex' : 'none';
+  });
+
+  // Toggle remove row buttons
+  document.querySelectorAll('.remove-name-btn').forEach(btn => {
+    btn.style.display = editable ? 'flex' : 'none';
+  });
+  document.querySelectorAll('.remove-parcel-btn').forEach(btn => {
+    btn.style.display = editable ? 'flex' : 'none';
+  });
+  document.querySelectorAll('.remove-patta-btn').forEach(btn => {
+    btn.style.display = editable ? 'flex' : 'none';
+  });
+
+  // Toggle status switch sliders pointerEvents
+  document.querySelectorAll('.patta-block .switch').forEach(sw => {
+    sw.style.pointerEvents = editable ? 'auto' : 'none';
+  });
+
+  // Toggle action buttons visibility
+  if (editable) {
+    saveRecordBtn.classList.remove('hidden');
+    editRecordBtn.classList.add('hidden');
+    const recordIdVal = document.getElementById('recordId').value;
+    if (recordIdVal) {
+      deleteRecordBtn.classList.remove('hidden');
+    } else {
+      deleteRecordBtn.classList.add('hidden');
+    }
   } else {
-    pattaStatusDescription.innerText = 'Patta is not yet transferred (Pending)';
-    pattaStatusDescription.style.color = 'var(--text-muted)';
+    saveRecordBtn.classList.add('hidden');
+    deleteRecordBtn.classList.add('hidden');
+    editRecordBtn.classList.remove('hidden');
   }
-});
+}
 
 // -------------------------------------------------------------
 // Drawer Controller
@@ -287,52 +577,60 @@ function openDrawer(record = null) {
   formDrawer.classList.add('active');
   drawerOverlay.classList.add('active');
   document.body.style.overflow = 'hidden'; // Stop background scrolling
+  state.activeRecord = record;
 
   if (record) {
-    // Edit Mode
-    document.getElementById('drawerTitle').innerText = 'Edit Land Record';
+    // View Mode (details view)
+    document.getElementById('drawerTitle').innerText = 'Land Record Details';
     document.getElementById('recordId').value = record.id;
-    document.getElementById('surveyNumber').value = record.surveyNumber;
-    document.getElementById('subDivision').value = record.subDivision;
-    document.getElementById('pattaNumber').value = record.pattaNumber;
     document.getElementById('documentNumber').value = record.documentNumber;
     document.getElementById('purchaseDate').value = record.purchaseDate ? record.purchaseDate.split('T')[0] : '';
-    document.getElementById('purchasedFrom').value = record.purchasedFrom || '';
     
-    // Land Type
-    landType.value = record.landType || 'dry';
+    // Fallback fields for legacy selectors
+    document.getElementById('surveyNumber').value = record.surveyNumber || '';
+    document.getElementById('subDivision').value = record.subDivision || '';
+    document.getElementById('pattaNumber').value = record.pattaNumber || '';
+    document.getElementById('landType').value = record.landType || 'dry';
+    document.getElementById('isPattaTransferred').value = record.isPattaTransferred ? 'true' : 'false';
 
     // Location
     district.value = record.district || '';
     sro.value = record.sro || '';
     village.value = record.village || '';
     
-    // Land Size & Unit
-    document.getElementById('landSizeValue').value = record.landSize.value;
-    document.querySelector(`input[name="landSizeUnit"][value="${record.landSize.unit}"]`).checked = true;
+    // Notes
+    notesTextarea.value = record.notes || '';
     
-    // Patta Transferred
-    isPattaTransferred.checked = record.isPattaTransferred;
-    isPattaTransferred.dispatchEvent(new Event('change'));
+    // Land Size fallback for compatibility
+    document.getElementById('landSizeValue').value = record.landSize ? record.landSize.value : '';
 
-    // Dynamic names
-    resetNameInputs(record.pattaNames);
+    // Dynamic document owner & seller lists
+    resetDocumentInputs(record.documentOwnerName || [], record.purchasedFrom || []);
 
-    // Show delete button
-    deleteRecordBtn.classList.remove('hidden');
+    // Dynamic pattas list
+    resetPattaInputs(record.pattas || []);
+
+    // Disable all inputs for viewing
+    toggleFormEditable(false);
   } else {
-    // Add Mode
+    // Add Mode (editable from the start)
     document.getElementById('drawerTitle').innerText = 'Add Land Record';
     document.getElementById('recordId').value = '';
     recordForm.reset();
-    landType.value = 'dry';
     district.value = '';
     sro.value = '';
     village.value = '';
-    isPattaTransferred.checked = false;
-    isPattaTransferred.dispatchEvent(new Event('change'));
-    resetNameInputs();
-    deleteRecordBtn.classList.add('hidden');
+    notesTextarea.value = '';
+    document.getElementById('surveyNumber').value = '';
+    document.getElementById('subDivision').value = '';
+    document.getElementById('pattaNumber').value = '';
+    document.getElementById('landType').value = 'dry';
+    document.getElementById('isPattaTransferred').value = 'false';
+    resetDocumentInputs();
+    resetPattaInputs();
+    
+    // Enable inputs
+    toggleFormEditable(true);
   }
   handleLiveConversion();
 }
@@ -341,6 +639,7 @@ function closeDrawer() {
   formDrawer.classList.remove('active');
   drawerOverlay.classList.remove('active');
   document.body.style.overflow = ''; // Resume scrolling
+  state.activeRecord = null;
   
   // Clear any validation errors
   document.querySelectorAll('.form-group.invalid').forEach(el => el.classList.remove('invalid'));
@@ -350,8 +649,23 @@ function closeDrawer() {
   if (btn) btn.addEventListener('click', () => openDrawer());
 });
 
-[closeDrawerBtn, cancelFormBtn, drawerOverlay].forEach(btn => {
-  if (btn) btn.addEventListener('click', closeDrawer);
+closeDrawerBtn.addEventListener('click', closeDrawer);
+drawerOverlay.addEventListener('click', closeDrawer);
+
+cancelFormBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  const isEditable = !document.getElementById('surveyNumber').disabled;
+  if (state.activeRecord && isEditable) {
+    openDrawer(state.activeRecord);
+  } else {
+    closeDrawer();
+  }
+});
+
+editRecordBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  document.getElementById('drawerTitle').innerText = 'Edit Land Record';
+  toggleFormEditable(true);
 });
 
 // -------------------------------------------------------------
@@ -361,21 +675,7 @@ function validateForm() {
   let isValid = true;
 
   // Clear errors
-  document.querySelectorAll('.form-group.invalid').forEach(el => el.classList.remove('invalid'));
-
-  // Survey number
-  const survey = document.getElementById('surveyNumber');
-  if (!survey.value.trim()) {
-    survey.parentElement.classList.add('invalid');
-    isValid = false;
-  }
-
-  // Patta number
-  const patta = document.getElementById('pattaNumber');
-  if (!patta.value.trim()) {
-    patta.parentElement.classList.add('invalid');
-    isValid = false;
-  }
+  document.querySelectorAll('.form-group.invalid, .patta-owners-box.invalid, .patta-parcels-box.invalid').forEach(el => el.classList.remove('invalid'));
 
   // Doc number
   const doc = document.getElementById('documentNumber');
@@ -384,27 +684,93 @@ function validateForm() {
     isValid = false;
   }
 
-  // Size value
-  const size = document.getElementById('landSizeValue');
-  const parsedSize = parseFloat(size.value);
-  if (isNaN(parsedSize) || parsedSize <= 0) {
-    size.parentElement.parentElement.classList.add('invalid');
-    isValid = false;
-  }
-
-  // Check co-owner names
-  const nameInputs = pattaNamesContainer.querySelectorAll('.patta-name-input');
-  let hasName = false;
-  nameInputs.forEach(input => {
-    if (input.value.trim()) hasName = true;
+  // Check document owner names
+  const docOwnerInputs = docOwnersContainer.querySelectorAll('.doc-owner-name-input');
+  let hasDocOwner = false;
+  docOwnerInputs.forEach(input => {
+    if (input.value.trim()) hasDocOwner = true;
   });
 
-  const namesError = document.getElementById('pattaNamesError');
-  if (!hasName) {
-    namesError.style.display = 'block';
+  const docOwnersError = document.getElementById('docOwnersError');
+  if (!hasDocOwner) {
+    docOwnersError.style.display = 'block';
     isValid = false;
   } else {
-    namesError.style.display = 'none';
+    docOwnersError.style.display = 'none';
+  }
+
+  // Validate dynamic hierarchical pattas
+  const pattaBlocks = pattasContainer.querySelectorAll('.patta-block');
+  let hasValidPatta = false;
+  
+  pattaBlocks.forEach(block => {
+    const pattaNumInput = block.querySelector('.patta-number-input');
+    const pattaNameInputs = block.querySelectorAll('.patta-name-input');
+    const parcelRows = block.querySelectorAll('.parcel-row');
+    let pattaValid = true;
+
+    // Check patta number
+    if (!pattaNumInput || !pattaNumInput.value.trim()) {
+      pattaNumInput.parentElement.classList.add('invalid');
+      isValid = false;
+      pattaValid = false;
+    }
+
+    // Check patta owners
+    let hasPattaOwner = false;
+    pattaNameInputs.forEach(input => {
+      if (input.value.trim()) hasPattaOwner = true;
+    });
+    if (!hasPattaOwner) {
+      block.querySelector('.patta-owners-box').classList.add('invalid');
+      isValid = false;
+      pattaValid = false;
+    }
+
+    // Check parcels inside this patta
+    let hasParcel = false;
+    parcelRows.forEach(row => {
+      const surveyInput = row.querySelector('.parcel-survey-input');
+      const sizeInput = row.querySelector('.parcel-size-input');
+      let rowValid = true;
+
+      if (!surveyInput || !surveyInput.value.trim()) {
+        surveyInput.parentElement.classList.add('invalid');
+        isValid = false;
+        rowValid = false;
+      }
+
+      if (sizeInput) {
+        const val = parseFloat(sizeInput.value);
+        if (isNaN(val) || val <= 0) {
+          sizeInput.parentElement.classList.add('invalid');
+          isValid = false;
+          rowValid = false;
+        }
+      }
+
+      if (rowValid) {
+        hasParcel = true;
+      }
+    });
+
+    if (!hasParcel) {
+      block.querySelector('.patta-parcels-box').classList.add('invalid');
+      isValid = false;
+      pattaValid = false;
+    }
+
+    if (pattaValid) {
+      hasValidPatta = true;
+    }
+  });
+
+  const pattasError = document.getElementById('pattasError');
+  if (!hasValidPatta) {
+    pattasError.style.display = 'block';
+    isValid = false;
+  } else {
+    pattasError.style.display = 'none';
   }
 
   return isValid;
@@ -419,42 +785,86 @@ recordForm.addEventListener('submit', async (e) => {
   }
 
   const id = document.getElementById('recordId').value;
-  const surveyNumber = document.getElementById('surveyNumber').value;
-  const subDivision = document.getElementById('subDivision').value;
-  const pattaNumber = document.getElementById('pattaNumber').value;
   const documentNumber = document.getElementById('documentNumber').value;
   const purchaseDate = document.getElementById('purchaseDate').value;
-  const purchasedFrom = document.getElementById('purchasedFrom').value;
-  const landSizeValue = parseFloat(document.getElementById('landSizeValue').value);
-  const landSizeUnit = document.querySelector('input[name="landSizeUnit"]:checked').value;
-  const selectedLandType = landType.value;
   const districtVal = district.value;
   const sroVal = sro.value;
   const villageVal = village.value;
-  
-  // Gather non-empty names
-  const names = [];
-  pattaNamesContainer.querySelectorAll('.patta-name-input').forEach(input => {
-    if (input.value.trim()) names.push(input.value.trim());
+
+  // Gather non-empty doc owner names
+  const docOwnersVal = [];
+  docOwnersContainer.querySelectorAll('.doc-owner-name-input').forEach(input => {
+    if (input.value.trim()) docOwnersVal.push(input.value.trim());
+  });
+
+  // Gather non-empty seller names
+  const sellersVal = [];
+  purchasedFromContainer.querySelectorAll('.purchased-from-input').forEach(input => {
+    if (input.value.trim()) sellersVal.push(input.value.trim());
+  });
+
+  // Gather dynamic hierarchical pattas
+  const pattasVal = [];
+  pattasContainer.querySelectorAll('.patta-block').forEach(block => {
+    const pattaNumInput = block.querySelector('.patta-number-input');
+    const isTransferredCheckbox = block.querySelector('.patta-status-checkbox');
+    const pattaNumber = pattaNumInput ? pattaNumInput.value.trim() : '';
+    const isPattaTransferred = isTransferredCheckbox ? isTransferredCheckbox.checked : false;
+
+    const pattaNames = [];
+    block.querySelectorAll('.patta-name-input').forEach(input => {
+      if (input.value.trim()) pattaNames.push(input.value.trim());
+    });
+
+    const parcels = [];
+    block.querySelectorAll('.parcel-row').forEach(row => {
+      const surveyInput = row.querySelector('.parcel-survey-input');
+      const subdivInput = row.querySelector('.parcel-subdiv-input');
+      const sizeInput = row.querySelector('.parcel-size-input');
+      const unitInput = row.querySelector('.parcel-unit-input');
+      const typeInput = row.querySelector('.parcel-type-input');
+
+      if (surveyInput && sizeInput) {
+        const survey = surveyInput.value.trim();
+        const subdiv = subdivInput ? subdivInput.value.trim() : '';
+        const size = parseFloat(sizeInput.value);
+        const unit = unitInput ? unitInput.value : 'cent';
+        const landType = typeInput ? typeInput.value : 'dry';
+
+        if (survey && !isNaN(size) && size > 0) {
+          parcels.push({
+            surveyNumber: survey,
+            subDivision: subdiv,
+            landSize: {
+              value: size,
+              unit: unit
+            },
+            landType
+          });
+        }
+      }
+    });
+
+    if (pattaNumber && parcels.length > 0) {
+      pattasVal.push({
+        pattaNumber,
+        isPattaTransferred,
+        pattaNames,
+        parcels
+      });
+    }
   });
 
   const payload = {
-    surveyNumber,
-    subDivision,
-    pattaNumber,
     documentNumber,
-    isPattaTransferred: isPattaTransferred.checked,
-    pattaNames: names,
-    landSize: {
-      value: landSizeValue,
-      unit: landSizeUnit
-    },
-    landType: selectedLandType,
+    documentOwnerName: docOwnersVal,
+    purchasedFrom: sellersVal,
     purchaseDate: purchaseDate || null,
-    purchasedFrom,
+    pattas: pattasVal,
     district: districtVal,
     sro: sroVal,
-    village: villageVal
+    village: villageVal,
+    notes: notesTextarea.value.trim()
   };
 
   const url = id ? `/api/records/${id}` : '/api/records';
@@ -547,11 +957,11 @@ async function fetchRecords() {
 function populateOwnerFilter() {
   const selectedValue = filterName.value || 'all';
   
-  // Extract all unique present names on the patta
+  // Extract all unique present document owner names
   const ownersSet = new Set();
   state.records.forEach(record => {
-    if (Array.isArray(record.pattaNames)) {
-      record.pattaNames.forEach(name => {
+    if (Array.isArray(record.documentOwnerName)) {
+      record.documentOwnerName.forEach(name => {
         if (name && name.trim()) ownersSet.add(name.trim());
       });
     }
@@ -560,7 +970,7 @@ function populateOwnerFilter() {
   const uniqueOwners = Array.from(ownersSet).sort((a, b) => a.localeCompare(b));
 
   // Reset dropdown list
-  filterName.innerHTML = '<option value="all">All Owners</option>';
+  filterName.innerHTML = '<option value="all">All Document Owners</option>';
 
   // Append new options
   uniqueOwners.forEach(owner => {
@@ -587,6 +997,7 @@ function updateDashboard(recordsList = state.records) {
   let totalCents = 0;
   let totalSqft = 0;
   let totalAcres = 0;
+  let totalAres = 0;
   let transferredCount = 0;
 
   recordsList.forEach(r => {
@@ -595,26 +1006,31 @@ function updateDashboard(recordsList = state.records) {
       transferredCount++;
     }
 
-    // Cumulative size conversion (convert everything to cents, sqft, and acres)
+    // Cumulative size conversion (convert everything to cents, sqft, acres, and ares)
     const conv = convertUnits(r.landSize.value, r.landSize.unit);
     totalCents += conv.cents;
     totalSqft += conv.sqft;
     totalAcres += conv.acres;
+    totalAres += conv.ares;
   });
 
   // Render main size display in the user's selected preference
   const viewUnitVal = state.displayUnit;
   if (viewUnitVal === 'cent') {
     statTotalSize.innerText = formatSizeDisplay(totalCents, 'cent');
-    statTotalSizeSub1.innerText = formatSizeDisplay(totalAcres, 'acre');
+    statTotalSizeSub1.innerText = formatSizeDisplay(totalAres, 'are') + ' | ' + formatSizeDisplay(totalAcres, 'acre');
     statTotalSizeSub2.innerText = formatSizeDisplay(totalSqft, 'sqft');
   } else if (viewUnitVal === 'sqft') {
     statTotalSize.innerText = formatSizeDisplay(totalSqft, 'sqft');
-    statTotalSizeSub1.innerText = formatSizeDisplay(totalCents, 'cent');
+    statTotalSizeSub1.innerText = formatSizeDisplay(totalCents, 'cent') + ' | ' + formatSizeDisplay(totalAres, 'are');
     statTotalSizeSub2.innerText = formatSizeDisplay(totalAcres, 'acre');
-  } else {
+  } else if (viewUnitVal === 'acre') {
     statTotalSize.innerText = formatSizeDisplay(totalAcres, 'acre');
-    statTotalSizeSub1.innerText = formatSizeDisplay(totalCents, 'cent');
+    statTotalSizeSub1.innerText = formatSizeDisplay(totalCents, 'cent') + ' | ' + formatSizeDisplay(totalAres, 'are');
+    statTotalSizeSub2.innerText = formatSizeDisplay(totalSqft, 'sqft');
+  } else if (viewUnitVal === 'are') {
+    statTotalSize.innerText = formatSizeDisplay(totalAres, 'are');
+    statTotalSizeSub1.innerText = formatSizeDisplay(totalCents, 'cent') + ' | ' + formatSizeDisplay(totalAcres, 'acre');
     statTotalSizeSub2.innerText = formatSizeDisplay(totalSqft, 'sqft');
   }
 
@@ -633,12 +1049,43 @@ function getFilteredAndSortedRecords() {
       // 1. Search Query Match
       if (state.searchQuery) {
         const query = state.searchQuery.toLowerCase();
-        const matchesSurvey = record.surveyNumber.toLowerCase().includes(query) || 
-                              (record.subDivision && record.subDivision.toLowerCase().includes(query));
-        const matchesPatta = record.pattaNumber.toLowerCase().includes(query);
+        const matchesDocOwner = Array.isArray(record.documentOwnerName) && record.documentOwnerName.some(name => name.toLowerCase().includes(query));
+        const matchesSeller = Array.isArray(record.purchasedFrom) && record.purchasedFrom.some(name => name.toLowerCase().includes(query));
         const matchesDoc = record.documentNumber.toLowerCase().includes(query);
-        const matchesSeller = record.purchasedFrom && record.purchasedFrom.toLowerCase().includes(query);
-        const matchesOwners = record.pattaNames.some(name => name.toLowerCase().includes(query));
+        
+        let matchesPatta = false;
+        let matchesOwners = matchesDocOwner;
+        let matchesSurvey = false;
+        
+        if (Array.isArray(record.pattas)) {
+          record.pattas.forEach(p => {
+            if (p.pattaNumber && p.pattaNumber.toLowerCase().includes(query)) {
+              matchesPatta = true;
+            }
+            if (Array.isArray(p.pattaNames)) {
+              p.pattaNames.forEach(name => {
+                if (name.toLowerCase().includes(query)) matchesOwners = true;
+              });
+            }
+            if (Array.isArray(p.parcels)) {
+              p.parcels.forEach(parcel => {
+                if (parcel.surveyNumber && parcel.surveyNumber.toLowerCase().includes(query)) {
+                  matchesSurvey = true;
+                }
+                if (parcel.subDivision && parcel.subDivision.toLowerCase().includes(query)) {
+                  matchesSurvey = true;
+                }
+              });
+            }
+          });
+        } else {
+          matchesPatta = record.pattaNumber.toLowerCase().includes(query);
+          matchesSurvey = record.surveyNumber.toLowerCase().includes(query) || 
+                          (record.subDivision && record.subDivision.toLowerCase().includes(query));
+          if (Array.isArray(record.pattaNames)) {
+            matchesOwners = record.pattaNames.some(name => name.toLowerCase().includes(query)) || matchesDocOwner;
+          }
+        }
 
         if (!matchesSurvey && !matchesPatta && !matchesDoc && !matchesSeller && !matchesOwners) {
           return false;
@@ -650,10 +1097,26 @@ function getFilteredAndSortedRecords() {
       if (state.pattaFilter === 'pending' && record.isPattaTransferred) return false;
 
       // 2b. Land Type Filter
-      if (state.landTypeFilter !== 'all' && record.landType !== state.landTypeFilter) return false;
+      if (state.landTypeFilter !== 'all') {
+        let hasMatchingType = false;
+        if (Array.isArray(record.pattas)) {
+          record.pattas.forEach(p => {
+            if (Array.isArray(p.parcels)) {
+              p.parcels.forEach(parcel => {
+                if (parcel.landType === state.landTypeFilter) {
+                  hasMatchingType = true;
+                }
+              });
+            }
+          });
+        } else {
+          hasMatchingType = (record.landType === state.landTypeFilter);
+        }
+        if (!hasMatchingType) return false;
+      }
 
       // 2c. Owner Name Filter
-      if (state.nameFilter !== 'all' && !record.pattaNames.includes(state.nameFilter)) return false;
+      if (state.nameFilter !== 'all' && !(Array.isArray(record.documentOwnerName) && record.documentOwnerName.includes(state.nameFilter))) return false;
 
       return true;
     })
@@ -717,27 +1180,105 @@ function renderRecordsList() {
     const sizeInDisplayUnit = getDisplayValue(record.landSize, state.displayUnit);
     const sizeString = formatSizeDisplay(sizeInDisplayUnit, state.displayUnit);
 
-    // Dynamic co-owners chip list
-    const ownersHtml = record.pattaNames.map(name => `<span class="owner-chip">${name}</span>`).join('');
+    // Dynamic lists of chips
+    const docOwnersHtml = (Array.isArray(record.documentOwnerName) ? record.documentOwnerName : [record.documentOwnerName]).map(name => `<span class="owner-chip doc-owner-chip">${name}</span>`).join('');
+    const sellersHtml = (Array.isArray(record.purchasedFrom) ? record.purchasedFrom : [record.purchasedFrom]).filter(Boolean).map(name => `<span class="owner-chip seller-chip">${name}</span>`).join('');
 
     // Format purchase date for card
     const dateFormatted = record.purchaseDate ? new Date(record.purchaseDate).toLocaleDateString(undefined, {
       year: 'numeric', month: 'short', day: 'numeric'
     }) : 'N/A';
 
-    const subdivisionText = record.subDivision ? ` / ${record.subDivision}` : '';
+    // Survey tag header formatting: merge unique surveys from all pattas
+    let surveyHeaderText = '';
+    const uniqueSurveys = new Set();
+    if (Array.isArray(record.pattas)) {
+      record.pattas.forEach(p => {
+        if (Array.isArray(p.parcels)) {
+          p.parcels.forEach(parcel => {
+            const subdivText = parcel.subDivision ? `/${parcel.subDivision}` : '';
+            uniqueSurveys.add(`${parcel.surveyNumber}${subdivText}`);
+          });
+        }
+      });
+    }
+    
+    if (uniqueSurveys.size > 0) {
+      const surveysArr = Array.from(uniqueSurveys);
+      surveyHeaderText = surveysArr[0];
+      if (surveysArr.length > 1) {
+        surveyHeaderText += ` (+ ${surveysArr.length - 1} more)`;
+      }
+    } else {
+      const subdivText = record.subDivision ? ` / ${record.subDivision}` : '';
+      surveyHeaderText = `${record.surveyNumber}${subdivText}`;
+    }
+
+    // Dynamic list of nested Pattas & Parcels
+    let pattasHtml = '';
+    if (Array.isArray(record.pattas) && record.pattas.length > 0) {
+      pattasHtml = record.pattas.map(p => {
+        const pattaOwnersList = Array.isArray(p.pattaNames) ? p.pattaNames.map(name => `<span class="owner-chip" style="font-size: 0.65rem; padding: 1px 4px; margin-bottom: 2px;">${name}</span>`).join('') : '';
+        const pattaStatusText = p.isPattaTransferred ? 'Transferred' : 'Pending';
+        const pattaStatusClass = p.isPattaTransferred ? 'transferred' : 'pending';
+
+        const parcelsList = Array.isArray(p.parcels) ? p.parcels.map(parcel => {
+          const sizeVal = getDisplayValue(parcel.landSize, state.displayUnit);
+          const sizeStr = formatSizeDisplay(sizeVal, state.displayUnit);
+          const subdivText = parcel.subDivision ? ` / ${parcel.subDivision}` : '';
+          const typeLbl = {
+            wet: 'Wet (Nanjai)',
+            dry: 'Dry (Punjai)',
+            residential: 'Resi (Manai)',
+            commercial: 'Comm',
+            well: 'Well (Kenaru)'
+          }[parcel.landType || 'dry'] || 'Dry';
+          const typeClass = parcel.landType || 'dry';
+          
+          return `<div class="parcel-pill" style="font-size: 0.75rem; color: var(--text-secondary); display: flex; justify-content: space-between; padding: 2px 4px; align-items: center; border-bottom: 1px dashed rgba(255,255,255,0.03);">
+            <span>Survey <strong>${parcel.surveyNumber}${subdivText}</strong> <span class="type-tag ${typeClass}" style="font-size: 0.65rem; padding: 1px 4px; border-radius: 2px; margin-left: 4px; display: inline-block;">${typeLbl}</span></span>
+            <span style="font-weight: 600; color: var(--primary);">${sizeStr}</span>
+          </div>`;
+        }).join('') : '';
+
+        return `<div class="patta-summary-block" style="background-color: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: var(--radius-xs); padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+            <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary);">Patta: <strong>${p.pattaNumber}</strong></span>
+            <span class="patta-status-tag ${pattaStatusClass}" style="font-size: 0.65rem; padding: 2px 6px;">${pattaStatusText}</span>
+          </div>
+          ${pattaOwnersList ? `<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;"><span style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); font-weight: 500;">Owners:</span> ${pattaOwnersList}</div>` : ''}
+          <div style="display: flex; flex-direction: column; gap: 2px; margin-top: 2px;">
+            ${parcelsList}
+          </div>
+        </div>`;
+      }).join('');
+    } else {
+      const subdivText = record.subDivision ? ` / ${record.subDivision}` : '';
+      pattasHtml = `<div class="patta-summary-block" style="background-color: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: var(--radius-xs); padding: 8px 12px; display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary);">Patta: <strong>${record.pattaNumber}</strong></span>
+        </div>
+        <div class="parcel-pill" style="font-size: 0.75rem; color: var(--text-secondary); display: flex; justify-content: space-between; padding: 2px 4px;">
+          <span>Survey <strong>${record.surveyNumber}${subdivText}</strong></span>
+          <span style="font-weight: 600; color: var(--primary);">${sizeString}</span>
+        </div>
+      </div>`;
+    }
 
     const typeLabel = {
       wet: 'Wet (Nanjai)',
       dry: 'Dry (Punjai)',
       residential: 'Resi (Manai)',
-      commercial: 'Commercial'
+      commercial: 'Commercial',
+      well: 'Well (Kenaru)'
     }[record.landType || 'dry'] || 'Dry (Punjai)';
+
+    const sellersText = sellersHtml ? `<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;"><span class="lbl" style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; font-family: var(--font-heading); font-weight: 500;">From:</span> <div class="owners-list">${sellersHtml}</div></div>` : '';
 
     card.innerHTML = `
       <div class="card-top">
         <div class="survey-tag">
-          <span class="number">${record.surveyNumber}${subdivisionText}</span>
+          <span class="number">${surveyHeaderText}</span>
           <span class="label">Survey No / Sub-div</span>
         </div>
         <div class="card-tags">
@@ -750,27 +1291,36 @@ function renderRecordsList() {
 
       <div class="card-body-grid">
         <div class="info-item">
-          <span class="lbl">Patta No</span>
-          <span class="val">${record.pattaNumber}</span>
-        </div>
-        <div class="info-item">
-          <span class="lbl">Land Size</span>
-          <span class="val" style="color: var(--primary); font-weight: 700;">${sizeString}</span>
-        </div>
-        <div class="info-item">
           <span class="lbl">Doc No</span>
           <span class="val">${record.documentNumber}</span>
         </div>
         <div class="info-item">
-          <span class="lbl">Owner(s) in Patta</span>
-          <div class="owners-list">${ownersHtml}</div>
+          <span class="lbl">Total Size</span>
+          <span class="val" style="color: var(--primary); font-weight: 700;">${sizeString}</span>
+        </div>
+        <div class="info-item" style="grid-column: span 2;">
+          <span class="lbl">Document Owner(s)</span>
+          <div class="owners-list">${docOwnersHtml}</div>
+        </div>
+        <div class="info-item" style="grid-column: span 2;">
+          <span class="lbl" style="margin-bottom: 6px;">Pattas & Parcels</span>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${pattasHtml}
+          </div>
         </div>
       </div>
 
-      <div class="card-footer">
+      ${record.notes ? `
+      <div style="padding: 0 20px 12px 20px; font-size: 0.8rem; color: var(--text-muted); border-top: 1px dashed rgba(255,255,255,0.03); padding-top: 8px;">
+        <span style="font-weight: 600; color: var(--text-secondary); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.05em; display: block; margin-bottom: 2px;">Notes</span>
+        <p style="margin: 0; line-height: 1.4; white-space: pre-wrap;">${record.notes}</p>
+      </div>
+      ` : ''}
+
+      <div class="card-footer" style="align-items: flex-start;">
         <div class="purchase-details">
           <span>Purchased: <strong>${dateFormatted}</strong></span>
-          ${record.purchasedFrom ? `<span>From: <strong class="seller-name">${record.purchasedFrom}</strong></span>` : ''}
+          ${sellersText}
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <button type="button" class="btn btn-outline btn-sm ec-helper-trigger" data-id="${record.id}" style="padding: 4px 8px; font-size: 0.7rem; border-radius: var(--radius-xs); height: 26px; font-family: var(--font-body); font-weight: 500;">
@@ -851,31 +1401,49 @@ exportCsvBtn.addEventListener('click', () => {
     return;
   }
 
-  const headers = ['ID', 'Survey Number', 'Sub Division', 'Patta Number', 'Document Number', 'Land Type', 'District', 'SRO', 'Village', 'Patta Transferred', 'Patta Owners', 'Size Value', 'Size Unit', 'Size in Cent', 'Size in SqFt', 'Size in Acre', 'Purchase Date', 'Purchased From', 'Created At'];
+  const headers = ['ID', 'Survey Number', 'Sub Division', 'Patta Number', 'Document Number', 'Document Owner Name', 'Land Type', 'District', 'SRO', 'Village', 'Patta Transferred', 'Patta Owners', 'Parcels', 'Size Value', 'Size Unit', 'Size in Cent', 'Size in SqFt', 'Size in Acre', 'Size in Are', 'Purchase Date', 'Purchased From', 'Notes', 'Created At'];
   
   const csvRows = [headers.join(',')];
 
   filtered.forEach(r => {
     const conv = convertUnits(r.landSize.value, r.landSize.unit);
+    const docOwnersStr = Array.isArray(r.documentOwnerName) ? r.documentOwnerName.join(', ') : (r.documentOwnerName || '');
+    const sellersStr = Array.isArray(r.purchasedFrom) ? r.purchasedFrom.join(', ') : (r.purchasedFrom || '');
+    let parcelsSummary = '';
+    if (Array.isArray(r.pattas)) {
+      parcelsSummary = r.pattas.map(p => {
+        const owners = Array.isArray(p.pattaNames) ? p.pattaNames.join(', ') : '';
+        const status = p.isPattaTransferred ? 'Transferred' : 'Pending';
+        const parcels = Array.isArray(p.parcels) ? p.parcels.map(parcel => `${parcel.surveyNumber}${parcel.subDivision ? '/' + parcel.subDivision : ''} (${parcel.landType || 'dry'}): ${parcel.landSize.value} ${parcel.landSize.unit}`).join('; ') : '';
+        return `[Patta ${p.pattaNumber} (${status}) - Owners: ${owners} - Parcels: ${parcels}]`;
+      }).join(' | ');
+    } else if (Array.isArray(r.parcels)) {
+      parcelsSummary = r.parcels.map(p => `${p.surveyNumber}${p.subDivision ? ' / ' + p.subDivision : ''}: ${p.landSize.value} ${p.landSize.unit}`).join(' | ');
+    }
+    
     const row = [
       r.id,
       `"${r.surveyNumber.replace(/"/g, '""')}"`,
       `"${(r.subDivision || '').replace(/"/g, '""')}"`,
       `"${r.pattaNumber.replace(/"/g, '""')}"`,
       `"${r.documentNumber.replace(/"/g, '""')}"`,
+      `"${docOwnersStr.replace(/"/g, '""')}"`,
       `"${(r.landType || 'dry').replace(/"/g, '""')}"`,
       `"${(r.district || '').replace(/"/g, '""')}"`,
       `"${(r.sro || '').replace(/"/g, '""')}"`,
       `"${(r.village || '').replace(/"/g, '""')}"`,
       r.isPattaTransferred ? 'Yes' : 'No',
       `"${r.pattaNames.join(', ').replace(/"/g, '""')}"`,
+      `"${parcelsSummary.replace(/"/g, '""')}"`,
       r.landSize.value,
       r.landSize.unit,
       conv.cents.toFixed(4),
       conv.sqft.toFixed(2),
       conv.acres.toFixed(6),
+      conv.ares.toFixed(6),
       r.purchaseDate ? r.purchaseDate.split('T')[0] : '',
-      `"${(r.purchasedFrom || '').replace(/"/g, '""')}"`,
+      `"${sellersStr.replace(/"/g, '""')}"`,
+      `"${(r.notes || '').replace(/"/g, '""')}"`,
       r.createdAt
     ];
     csvRows.push(row.join(','));

@@ -83,13 +83,16 @@
 
       <!-- Filter, Search and Controls Bar -->
       <section class="toolbar">
-        <div class="search-box">
-          <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <input type="text" id="searchInput" placeholder="Search by survey, patta, doc, name...">
-          <button id="clearSearchBtn" class="clear-btn hidden">&times;</button>
-        </div>
-
         <div class="filter-controls">
+          <div class="control-group search-control-group">
+            <label for="searchInput">Search Records</label>
+            <div class="search-box">
+              <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" id="searchInput" placeholder="Search by survey, patta, doc, name...">
+              <button id="clearSearchBtn" class="clear-btn hidden">&times;</button>
+            </div>
+          </div>
+
           <div class="control-group">
             <label for="filterPatta">Patta Status</label>
             <select id="filterPatta" class="select-input">
@@ -107,13 +110,14 @@
               <option value="dry">Dry Land (Punjai)</option>
               <option value="residential">Residential (Manai)</option>
               <option value="commercial">Commercial</option>
+              <option value="well">Well (Kenaru)</option>
             </select>
           </div>
 
           <div class="control-group">
-            <label for="filterName">Owner Name</label>
+            <label for="filterName">Document Owner Name</label>
             <select id="filterName" class="select-input">
-              <option value="all">All Owners</option>
+              <option value="all">All Document Owners</option>
             </select>
           </div>
 
@@ -134,6 +138,7 @@
               <option value="cent">Cents (ct)</option>
               <option value="sqft">Square Feet (sq ft)</option>
               <option value="acre">Acres (ac)</option>
+              <option value="are">Ares (a)</option>
             </select>
           </div>
         </div>
@@ -188,60 +193,63 @@
         <input type="hidden" id="recordId" value="">
         
         <div class="form-grid">
-          <!-- Survey & Sub-division -->
-          <div class="form-row-half">
-            <div class="form-group">
-              <label for="surveyNumber">Survey Number <span class="required">*</span></label>
-              <input type="text" id="surveyNumber" placeholder="e.g., 204" required>
-              <span class="error-msg">Survey Number is required</span>
-            </div>
-            <div class="form-group">
-              <label for="subDivision">Sub-Division</label>
-              <input type="text" id="subDivision" placeholder="e.g., 3B2">
-            </div>
-          </div>
+          <input type="hidden" id="surveyNumber" value="">
+          <input type="hidden" id="subDivision" value="">
 
-          <!-- Patta Number & Document Number -->
+          <input type="hidden" id="pattaNumber" value="">
+          <input type="hidden" id="isPattaTransferred" value="false">
+
+          <!-- Document Number -->
           <div class="form-row-half">
-            <div class="form-group">
-              <label for="pattaNumber">Patta Number <span class="required">*</span></label>
-              <input type="text" id="pattaNumber" placeholder="e.g., 1403" required>
-              <span class="error-msg">Patta Number is required</span>
-            </div>
             <div class="form-group">
               <label for="documentNumber">Document Number <span class="required">*</span></label>
               <input type="text" id="documentNumber" placeholder="e.g., 2405/2023" required>
               <span class="error-msg">Document Number is required</span>
             </div>
+            <div class="form-group">
+              <!-- Kept empty for visual balance -->
+            </div>
           </div>
 
-          <!-- Land Purchased Date & Purchased From -->
+          <!-- Land Purchased Date -->
           <div class="form-row-half">
             <div class="form-group">
               <label for="purchaseDate">Purchase Date</label>
               <input type="date" id="purchaseDate">
             </div>
             <div class="form-group">
-              <label for="purchasedFrom">Purchased From (Seller)</label>
-              <input type="text" id="purchasedFrom" placeholder="e.g., K. Ramasamy">
-            </div>
-          </div>
-
-          <!-- Land Type -->
-          <div class="form-row-half">
-            <div class="form-group">
-              <label for="landType">Land Type <span class="required">*</span></label>
-              <select id="landType" class="select-input">
-                <option value="wet">Wet Land (Nanjai)</option>
-                <option value="dry" selected>Dry Land (Punjai)</option>
-                <option value="residential">Residential (Manai)</option>
-                <option value="commercial">Commercial</option>
-              </select>
-            </div>
-            <div class="form-group">
               <!-- Kept empty for visual balance -->
             </div>
           </div>
+
+          <!-- Purchased From (Sellers - Dynamic list) -->
+          <div class="form-group purchased-from-section">
+            <label>Purchased From (Sellers)</label>
+            <span class="field-hint">Add name(s) of the seller(s)</span>
+            <div id="purchasedFromContainer" class="purchased-from-container">
+              <!-- Dynamically rendered list of inputs -->
+            </div>
+            <button type="button" id="addPurchasedFromRowBtn" class="btn btn-outline-dashed btn-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+              Add Seller Name
+            </button>
+          </div>
+
+          <!-- Document Owner Name(s) (Dynamic list) -->
+          <div class="form-group doc-owners-section">
+            <label>Document Owner Name(s) <span class="required">*</span></label>
+            <span class="field-hint">Add name(s) registered on the document</span>
+            <div id="docOwnersContainer" class="doc-owners-container">
+              <!-- Dynamically rendered list of inputs -->
+            </div>
+            <button type="button" id="addDocOwnerRowBtn" class="btn btn-outline-dashed btn-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+              Add Document Owner Name
+            </button>
+            <span id="docOwnersError" class="error-msg">At least one Document Owner Name is required</span>
+          </div>
+
+          <input type="hidden" id="landType" value="dry">
 
           <!-- Location Details (Optional, useful for EC Search) -->
           <div class="form-section-title" style="margin-top: 12px; font-weight: 600; font-size: 0.9rem; color: var(--primary);">
@@ -267,60 +275,46 @@
             </div>
           </div>
 
-          <!-- Land Size Input & Automatic Converter -->
-          <div class="form-group land-size-group">
-            <label for="landSizeValue">Land Size <span class="required">*</span></label>
-            <div class="size-input-wrapper">
-              <input type="number" id="landSizeValue" placeholder="e.g., 2.5" step="any" min="0.0001" required>
-              <div class="unit-selector">
-                <input type="radio" name="landSizeUnit" id="unitCent" value="cent" checked>
-                <label for="unitCent">Cent</label>
-                <input type="radio" name="landSizeUnit" id="unitSqft" value="sqft">
-                <label for="unitSqft">Sq Ft</label>
-                <input type="radio" name="landSizeUnit" id="unitAcre" value="acre">
-                <label for="unitAcre">Acre</label>
-              </div>
+          <!-- Land Size Input & Automatic Converter (Legacy hidden elements kept for compatibility) -->
+          <input type="hidden" id="landSizeValue" value="">
+
+          <!-- Pattas Section (Hierarchical dynamic list) -->
+          <div class="form-group pattas-section">
+            <label style="font-size: 1rem; font-weight: 700; color: var(--primary);">Document Pattas & Land Parcels <span class="required">*</span></label>
+            <span class="field-hint" style="margin-bottom: 12px; display: block;">Add Patta numbers, Patta status, present Patta Owners, and their nested land parcels</span>
+            
+            <div id="pattasContainer" class="pattas-container">
+              <!-- Dynamically populated Patta Cards (with nested co-owners and parcels) -->
             </div>
-            <span class="error-msg">Enter a valid land size</span>
-            <!-- Live unit conversion preview -->
-            <div id="unitConversionPreview" class="conversion-preview hidden">
+
+            <button type="button" id="addPattaBtn" class="btn btn-outline-dashed" style="margin-top: 12px; font-weight: 600; width: 100%;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+              Add Patta Record
+            </button>
+            <span id="pattasError" class="error-msg" style="margin-top: 8px;">At least one valid Patta record with a parcel is required</span>
+          </div>
+
+          <!-- Cumulative Size Conversion Preview -->
+          <div class="form-group cumulative-size-group">
+            <label>Total Cumulative Size</label>
+            <div id="unitConversionPreview" class="conversion-preview">
               <div class="conversion-pill"><strong id="convCent">0.00</strong> Cents</div>
               <div class="conversion-pill"><strong id="convSqft">0</strong> Sq Ft</div>
               <div class="conversion-pill"><strong id="convAcre">0.0000</strong> Acres</div>
+              <div class="conversion-pill"><strong id="convAre">0.0000</strong> Ares</div>
             </div>
           </div>
 
-          <!-- Is Patta Transferred -->
-          <div class="form-group patta-transfer-group">
-            <div class="toggle-container">
-              <div class="toggle-text">
-                <span class="toggle-title">Patta Status</span>
-                <span class="toggle-desc" id="pattaStatusDescription">Patta is not yet transferred (Pending)</span>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="isPattaTransferred">
-                <span class="slider round"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Names in Patta (Dynamic list) -->
-          <div class="form-group patta-names-section">
-            <label>Patta Names (Owners) <span class="required">*</span></label>
-            <span class="field-hint">Add present name(s) registered on this patta</span>
-            <div id="pattaNamesContainer" class="patta-names-container">
-              <!-- Dynamically rendered list of inputs -->
-            </div>
-            <button type="button" id="addNameRowBtn" class="btn btn-outline-dashed btn-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-              Add Co-owner Name
-            </button>
-            <span id="pattaNamesError" class="error-msg">At least one name is required</span>
+          <!-- Notes section -->
+          <div class="form-group notes-section">
+            <label for="notes">Notes / Remarks</label>
+            <textarea id="notes" placeholder="Enter any notes, deed remarks, registry details..." rows="3" style="width: 100%; padding: 12px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font-body); font-size: 0.95rem; resize: vertical; transition: all var(--transition-fast);"></textarea>
           </div>
 
         </div>
 
         <div class="drawer-actions">
+          <button type="button" id="editRecordBtn" class="btn btn-primary hidden">Edit Record</button>
           <button type="button" id="deleteRecordBtn" class="btn btn-danger hidden">Delete Record</button>
           <button type="button" id="cancelFormBtn" class="btn btn-secondary">Cancel</button>
           <button type="submit" id="saveRecordBtn" class="btn btn-primary">Save Record</button>

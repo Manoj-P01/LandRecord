@@ -218,7 +218,10 @@ h1, h2, h3, h4, h5, h6 {
   background-color: transparent;
   color: var(--primary);
   border: 1px dashed var(--primary);
-  width: 100%;
+  width: max-content;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  margin-top: 4px;
 }
 .btn-outline-dashed:hover {
   background-color: var(--primary-glow);
@@ -664,6 +667,16 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: var(--radius-xs);
   border: 1px solid var(--border-color);
 }
+.doc-owner-chip {
+  background-color: var(--primary-glow);
+  color: var(--text-primary);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+.seller-chip {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+  border-color: rgba(245, 158, 11, 0.3);
+}
 
 .card-footer {
   display: flex;
@@ -979,13 +992,17 @@ input:checked + .slider:before {
 }
 
 /* Dynamic Names section */
-.patta-names-section {
+.patta-names-section,
+.doc-owners-section,
+.purchased-from-section {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 16px;
   background-color: var(--glass-bg);
 }
-.patta-names-container {
+.patta-names-container,
+.doc-owners-container,
+.purchased-from-container {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1014,6 +1031,129 @@ input:checked + .slider:before {
 .remove-name-btn:hover {
   background-color: var(--danger);
   color: white;
+}
+
+/* Dynamic Pattas section styling */
+.pattas-section {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  background-color: var(--glass-bg);
+}
+.pattas-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+.patta-block {
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.patta-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.patta-block-header-inputs {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-grow: 1;
+  flex-wrap: wrap;
+}
+.remove-patta-btn {
+  background: var(--danger-bg);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--danger);
+  border-radius: var(--radius-xs);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.25rem;
+  transition: all var(--transition-fast);
+}
+.remove-patta-btn:hover {
+  background-color: var(--danger);
+  color: white;
+}
+
+/* Parcel row layout in the new hierarchical structure */
+.parcel-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  border: 1px solid var(--border-color);
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.01);
+}
+.parcel-row .form-group {
+  margin-bottom: 0;
+}
+.parcel-row .remove-parcel-btn {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  background: var(--danger-bg);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--danger);
+  border-radius: var(--radius-xs);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: all var(--transition-fast);
+}
+.parcel-row .remove-parcel-btn:hover {
+  background-color: var(--danger);
+  color: white;
+}
+
+@media (min-width: 768px) {
+  .parcel-row {
+    grid-template-columns: 2fr 1.5fr 2fr 1.8fr 2.2fr 36px;
+    padding-right: 0;
+    gap: 12px;
+    align-items: center;
+    background-color: transparent;
+    padding: 0;
+    border: none;
+  }
+  .parcel-row .remove-parcel-btn {
+    position: static;
+    transform: none;
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Notes Textarea styling */
+.notes-section textarea {
+  outline: none;
+}
+.notes-section textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
 }
 
 /* Validation Styling */
@@ -1234,19 +1374,16 @@ input:checked + .slider:before {
   }
 
   .toolbar {
-    flex-direction: row;
-    align-items: flex-end;
     padding: 20px;
   }
   
   .search-box {
-    width: auto;
-    flex-grow: 1;
+    width: 100%;
   }
   
   .filter-controls {
-    grid-template-columns: repeat(5, 160px);
-    width: auto;
+    grid-template-columns: 1.8fr repeat(5, 1fr);
+    width: 100%;
     gap: 16px;
   }
 
@@ -1264,7 +1401,7 @@ input:checked + .slider:before {
   }
 
   .form-drawer {
-    width: 480px;
+    width: 760px;
     height: 100%;
     border-top-left-radius: var(--radius-md);
     border-top-right-radius: 0;

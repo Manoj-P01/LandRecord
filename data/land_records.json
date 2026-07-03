@@ -1,11 +1,61 @@
 [
   {
+    "id": "1782839683572",
+    "surveyNumber": "104/1A",
+    "subDivision": "A1",
+    "pattaNumber": "840",
+    "isPattaTransferred": true,
+    "documentOwnerName": [
+      "Manoj Kumar"
+    ],
+    "pattaNames": [
+      "Manoj Kumar",
+      "K. Ramasamy"
+    ],
+    "landSize": {
+      "value": 12.5,
+      "unit": "cent"
+    },
+    "landType": "wet",
+    "purchaseDate": "2022-04-12",
+    "purchasedFrom": [
+      "S. Palanisamy"
+    ],
+    "notes": "Original patta record for wet land.",
+    "pattas": [
+      {
+        "pattaNumber": "840",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Manoj Kumar",
+          "K. Ramasamy"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "104/1A",
+            "subDivision": "A1",
+            "landSize": {
+              "value": 12.5,
+              "unit": "cent"
+            },
+            "landType": "wet"
+          }
+        ]
+      }
+    ],
+    "createdAt": "2026-06-30T17:14:43.572Z",
+    "updatedAt": "2026-06-30T17:14:43.572Z"
+  },
+  {
     "id": "1782884248315",
     "surveyNumber": "266",
     "subDivision": "6A",
     "pattaNumber": "289",
     "documentNumber": "57/1992",
     "isPattaTransferred": false,
+    "documentOwnerName": [
+      "Pappammal"
+    ],
     "pattaNames": [
       "Pappammal"
     ],
@@ -15,10 +65,33 @@
     },
     "landType": "dry",
     "purchaseDate": "1992-01-27",
-    "purchasedFrom": "Balakumar",
+    "purchasedFrom": [
+      "Balakumar"
+    ],
     "district": "",
     "sro": "",
     "village": "",
+    "notes": "",
+    "pattas": [
+      {
+        "pattaNumber": "289",
+        "isPattaTransferred": false,
+        "pattaNames": [
+          "Pappammal"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "266",
+            "subDivision": "6A",
+            "landSize": {
+              "value": 39.52,
+              "unit": "cent"
+            },
+            "landType": "dry"
+          }
+        ]
+      }
+    ],
     "createdAt": "2026-07-01T05:37:28.315Z",
     "updatedAt": "2026-07-01T05:37:28.315Z"
   },
@@ -29,6 +102,9 @@
     "pattaNumber": "271",
     "documentNumber": "57/1992",
     "isPattaTransferred": false,
+    "documentOwnerName": [
+      "Pappammal"
+    ],
     "pattaNames": [
       "Pappammal"
     ],
@@ -38,11 +114,125 @@
     },
     "landType": "dry",
     "purchaseDate": "1992-01-27",
-    "purchasedFrom": "Balakumar",
+    "purchasedFrom": [
+      "Balakumar"
+    ],
     "district": "",
     "sro": "",
     "village": "",
+    "notes": "",
+    "pattas": [
+      {
+        "pattaNumber": "271",
+        "isPattaTransferred": false,
+        "pattaNames": [
+          "Pappammal"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "266",
+            "subDivision": "6B",
+            "landSize": {
+              "value": 40.75,
+              "unit": "cent"
+            },
+            "landType": "dry"
+          }
+        ]
+      }
+    ],
     "createdAt": "2026-07-01T05:50:57.704Z",
     "updatedAt": "2026-07-01T05:50:57.704Z"
+  },
+  {
+    "id": "1782839688496",
+    "surveyNumber": "205/3",
+    "subDivision": "B2",
+    "pattaNumber": "1102",
+    "isPattaTransferred": false,
+    "documentOwnerName": [
+      "Manoj Kumar"
+    ],
+    "pattaNames": [
+      "Manoj Kumar"
+    ],
+    "landSize": {
+      "value": 1.25,
+      "unit": "acre"
+    },
+    "landType": "dry",
+    "purchaseDate": "2025-01-20",
+    "purchasedFrom": [
+      "L. Ganesan"
+    ],
+    "notes": "Acquired in dry land sector.",
+    "pattas": [
+      {
+        "pattaNumber": "1102",
+        "isPattaTransferred": false,
+        "pattaNames": [
+          "Manoj Kumar"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "205/3",
+            "subDivision": "B2",
+            "landSize": {
+              "value": 1.25,
+              "unit": "acre"
+            },
+            "landType": "dry"
+          }
+        ]
+      }
+    ],
+    "createdAt": "2026-06-30T17:14:48.496Z",
+    "updatedAt": "2026-06-30T17:14:48.496Z"
+  },
+  {
+    "id": "1782871155065",
+    "surveyNumber": "192",
+    "subDivision": "11B",
+    "pattaNumber": "453",
+    "isPattaTransferred": false,
+    "documentOwnerName": [
+      "Subaiya"
+    ],
+    "pattaNames": [
+      "Subaiya"
+    ],
+    "landSize": {
+      "value": 25,
+      "unit": "cent"
+    },
+    "landType": "dry",
+    "purchaseDate": null,
+    "purchasedFrom": [],
+    "district": "namakkal",
+    "sro": "mohanur",
+    "village": "arur",
+    "notes": "District registry Mohanoor record.",
+    "pattas": [
+      {
+        "pattaNumber": "453",
+        "isPattaTransferred": false,
+        "pattaNames": [
+          "Subaiya"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "192",
+            "subDivision": "11B",
+            "landSize": {
+              "value": 25,
+              "unit": "cent"
+            },
+            "landType": "dry"
+          }
+        ]
+      }
+    ],
+    "createdAt": "2026-07-01T01:59:15.065Z",
+    "updatedAt": "2026-07-01T01:59:15.065Z"
   }
 ]
