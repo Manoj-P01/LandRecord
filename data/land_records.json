@@ -1,1 +1,69 @@
-[]
+[
+  {
+    "id": "1783139731826",
+    "documentNumber": "57/1992",
+    "documentOwnerName": [
+      "Subbaiya"
+    ],
+    "purchasedFrom": [
+      "Balakumar A"
+    ],
+    "purchaseDate": "1992-01-27",
+    "pattas": [
+      {
+        "pattaNumber": "289",
+        "isPattaTransferred": false,
+        "pattaNames": [
+          "Pappammal"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "266",
+            "subDivision": "6A",
+            "landSize": {
+              "value": 16,
+              "unit": "are"
+            },
+            "landType": "dry"
+          }
+        ]
+      },
+      {
+        "pattaNumber": "271",
+        "isPattaTransferred": false,
+        "pattaNames": [
+          "Pappammal"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "266",
+            "subDivision": "6B",
+            "landSize": {
+              "value": 16.5,
+              "unit": "are"
+            },
+            "landType": "dry"
+          }
+        ]
+      }
+    ],
+    "district": "",
+    "sro": "",
+    "village": "",
+    "notes": "Patta not transferred",
+    "createdAt": "2026-07-04T04:35:31.826Z",
+    "updatedAt": "2026-07-04T04:35:31.826Z",
+    "pattaNumber": "289, 271",
+    "pattaNames": [
+      "Pappammal"
+    ],
+    "isPattaTransferred": false,
+    "surveyNumber": "266",
+    "subDivision": "6A",
+    "landType": "dry",
+    "landSize": {
+      "value": 80.3092,
+      "unit": "cent"
+    }
+  }
+]
