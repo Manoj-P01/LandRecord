@@ -791,10 +791,7 @@
             "landType": "dry"
           }
         ],
-        "attachment": {
-          "fileName": "",
-          "fileUrl": "/"
-        }
+        "attachment": null
       }
     ],
     "district": "",
@@ -802,7 +799,7 @@
     "village": "",
     "notes": "",
     "createdAt": "2026-07-04T14:14:54.333Z",
-    "updatedAt": "2026-07-04T14:19:58.712Z",
+    "updatedAt": "2026-07-04T14:20:06.632Z",
     "pattaNumber": "175",
     "pattaNames": [
       "Subbaiya"
