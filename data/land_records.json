@@ -239,7 +239,10 @@
             "landType": "wet"
           }
         ],
-        "attachment": null
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
       },
       {
         "pattaNumber": "1516",
@@ -255,10 +258,13 @@
               "value": 2.5,
               "unit": "are"
             },
-            "landType": "dry"
+            "landType": "well"
           }
         ],
-        "attachment": null
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
       }
     ],
     "district": "",
@@ -266,7 +272,7 @@
     "village": "",
     "notes": "",
     "createdAt": "2026-07-04T08:54:15.756Z",
-    "updatedAt": "2026-07-04T10:01:57.862Z",
+    "updatedAt": "2026-07-04T10:08:54.348Z",
     "pattaNumber": "2790, 1516",
     "pattaNames": [
       "Pushparaj",
