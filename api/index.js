@@ -20,7 +20,8 @@ if (!process.env.VERCEL) {
 }
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(process.cwd(), 'public')));
 
 // Cloud Persistence Configurations
@@ -108,6 +109,139 @@ function resolveDocumentFallbacks(record) {
   };
 
   return record;
+}
+
+function saveAttachments(recordId, uploadedAttachments, currentAttachments = {}, pattas = []) {
+  const attachments = { ...currentAttachments };
+  const recordDir = path.join(process.cwd(), 'public', 'attachments', recordId);
+
+  // Determine if we need to create the record attachments folder
+  const hasRecordUploads = uploadedAttachments && Object.values(uploadedAttachments).some(f => f && f.base64);
+  const hasPattaUploads = Array.isArray(pattas) && pattas.some(p => p.uploadedAttachment && p.uploadedAttachment.base64);
+  
+  if ((hasRecordUploads || hasPattaUploads) && !fs.existsSync(recordDir)) {
+    fs.mkdirSync(recordDir, { recursive: true });
+  }
+
+  // 1. Process record-level attachments (document and ec)
+  if (uploadedAttachments) {
+    const types = ['document', 'ec'];
+    for (const type of types) {
+      const fileData = uploadedAttachments[type];
+      if (fileData === null) continue;
+
+      if (fileData && fileData.delete) {
+        if (attachments[type]) {
+          const oldFilePath = path.join(process.cwd(), 'public', attachments[type].fileUrl);
+          try { if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath); } catch (e) {}
+          attachments[type] = null;
+        }
+      } else if (fileData && fileData.base64) {
+        if (attachments[type]) {
+          const oldFilePath = path.join(process.cwd(), 'public', attachments[type].fileUrl);
+          try { if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath); } catch (e) {}
+        }
+
+        const matches = fileData.base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches) {
+          const buffer = Buffer.from(matches[2], 'base64');
+          const ext = path.extname(fileData.name) || '.bin';
+          const fileName = `${type}${ext}`;
+          const filePath = path.join(recordDir, fileName);
+          fs.writeFileSync(filePath, buffer);
+          attachments[type] = {
+            fileName: fileData.name,
+            fileUrl: `/attachments/${recordId}/${fileName}`,
+            uploadedAt: new Date().toISOString()
+          };
+        }
+      }
+    }
+  }
+
+  // 2. Process Patta-level attachments
+  if (Array.isArray(pattas)) {
+    pattas.forEach((patta, idx) => {
+      const fileData = patta.uploadedAttachment;
+      
+      if (fileData && fileData.delete) {
+        if (patta.attachment) {
+          const oldFilePath = path.join(process.cwd(), 'public', patta.attachment.fileUrl);
+          try { if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath); } catch (e) {}
+        }
+        patta.attachment = null;
+      } else if (fileData && fileData.base64) {
+        if (patta.attachment) {
+          const oldFilePath = path.join(process.cwd(), 'public', patta.attachment.fileUrl);
+          try { if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath); } catch (e) {}
+        }
+
+        const matches = fileData.base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches) {
+          const buffer = Buffer.from(matches[2], 'base64');
+          const ext = path.extname(fileData.name) || '.bin';
+          const fileName = `patta_${idx}${ext}`;
+          const filePath = path.join(recordDir, fileName);
+          fs.writeFileSync(filePath, buffer);
+          patta.attachment = {
+            fileName: fileData.name,
+            fileUrl: `/attachments/${recordId}/${fileName}`,
+            uploadedAt: new Date().toISOString()
+          };
+        }
+      } else if (patta.attachment) {
+        const currentUrl = patta.attachment.fileUrl;
+        const currentExt = path.extname(currentUrl);
+        const expectedFileName = `patta_${idx}${currentExt}`;
+        const expectedUrl = `/attachments/${recordId}/${expectedFileName}`;
+        
+        if (currentUrl !== expectedUrl) {
+          const currentFilePath = path.join(process.cwd(), 'public', currentUrl);
+          const expectedFilePath = path.join(recordDir, expectedFileName);
+          try {
+            if (fs.existsSync(currentFilePath)) {
+              fs.renameSync(currentFilePath, expectedFilePath);
+              patta.attachment.fileUrl = expectedUrl;
+            }
+          } catch (e) {
+            console.error(`Failed to rename patta file from ${currentFilePath} to ${expectedFilePath}`, e);
+          }
+        }
+      }
+
+      delete patta.uploadedAttachment;
+    });
+
+    // Clean up orphaned patta files
+    if (fs.existsSync(recordDir)) {
+      try {
+        const files = fs.readdirSync(recordDir);
+        files.forEach(file => {
+          if (file.startsWith('patta_')) {
+            const match = file.match(/^patta_(\d+)/);
+            if (match) {
+              const fileIdx = parseInt(match[1], 10);
+              if (fileIdx >= pattas.length) {
+                const filePath = path.join(recordDir, file);
+                fs.unlinkSync(filePath);
+              }
+            }
+          }
+        });
+      } catch (e) {
+        console.error(`Failed to clean up orphaned patta files in ${recordDir}`, e);
+      }
+    }
+  }
+
+  // Clean up empty directories
+  try {
+    if (fs.existsSync(recordDir) && fs.readdirSync(recordDir).length === 0) {
+      fs.rmdirSync(recordDir);
+    }
+  } catch (e) {}
+
+  return attachments;
 }
 
 // Helper to read records (Async to handle external cloud DBs)
@@ -293,7 +427,9 @@ app.post('/api/records', async (req, res) => {
         pattaNumber: (p.pattaNumber || '').trim(),
         isPattaTransferred: !!p.isPattaTransferred,
         pattaNames,
-        parcels
+        parcels,
+        uploadedAttachment: p.uploadedAttachment || null,
+        attachment: p.attachment || null
       };
     }).filter(p => p.pattaNumber && p.parcels.length > 0);
   }
@@ -353,6 +489,7 @@ app.post('/api/records', async (req, res) => {
   };
 
   resolveDocumentFallbacks(newRecord);
+  newRecord.attachments = saveAttachments(newRecord.id, req.body.uploadedAttachments, {}, newRecord.pattas);
 
   records.push(newRecord);
   if (await writeRecords(records)) {
@@ -417,11 +554,17 @@ app.put('/api/records/:id', async (req, res) => {
         pattaNumber: (p.pattaNumber || '').trim(),
         isPattaTransferred: !!p.isPattaTransferred,
         pattaNames,
-        parcels
+        parcels,
+        uploadedAttachment: p.uploadedAttachment || null,
+        attachment: p.attachment || null
       };
     }).filter(p => p.pattaNumber && p.parcels.length > 0);
 
     record.pattas = formattedPattas;
+  }
+
+  if (req.body.uploadedAttachments !== undefined || record.pattas !== undefined) {
+    record.attachments = saveAttachments(record.id, req.body.uploadedAttachments, record.attachments || {}, record.pattas || []);
   }
 
   resolveDocumentFallbacks(record);
@@ -445,6 +588,17 @@ app.delete('/api/records/:id', async (req, res) => {
   }
 
   records.splice(index, 1);
+
+  // Clean up attachments folder
+  const recordDir = path.join(process.cwd(), 'public', 'attachments', id);
+  if (fs.existsSync(recordDir)) {
+    try {
+      fs.rmSync(recordDir, { recursive: true, force: true });
+    } catch (e) {
+      console.error(`Failed to clean up attachments for record ${id}:`, e);
+    }
+  }
+
   if (await writeRecords(records)) {
     res.json({ message: 'Record deleted successfully.', id });
   } else {
@@ -517,6 +671,8 @@ app.post('/api/records/import', async (req, res) => {
       sro: (r.sro || '').trim(),
       village: (r.village || '').trim(),
       notes: (r.notes || '').trim(),
+      attachments: r.attachments || {},
+      pattas: r.pattas || [],
       createdAt: r.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

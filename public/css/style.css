@@ -1436,3 +1436,186 @@ input:checked + .slider:before {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* -------------------------------------------------------------
+ * Document Attachments Styling
+ * ------------------------------------------------------------- */
+.attachments-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+
+@media (min-width: 576px) {
+  .attachments-form-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.attachment-upload-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attachment-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--input-bg);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  color: var(--text-secondary);
+  min-height: 80px;
+}
+
+.upload-area:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background-color: var(--primary-glow);
+}
+
+.upload-area svg {
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+
+.upload-area:hover svg {
+  color: var(--primary);
+}
+
+.upload-area span {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.attachment-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px;
+  background-color: var(--secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  min-height: 80px;
+}
+
+.attachment-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.attachment-name {
+  flex-grow: 1;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  word-break: break-all;
+  max-height: 54px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.attachment-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-view-attachment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text-secondary);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-color);
+  transition: all var(--transition-fast);
+}
+
+.btn-view-attachment:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background-color: var(--primary-glow);
+}
+
+.btn-remove-attachment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 1.2rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-remove-attachment:hover {
+  color: var(--danger);
+  transform: scale(1.1);
+}
+
+/* Card Attachments styles */
+.card-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: var(--secondary);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-color);
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.attachment-chip:hover {
+  background-color: var(--primary-glow);
+  color: var(--text-primary);
+  border-color: var(--primary);
+}
+
+.attachment-chip svg {
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+
+.attachment-chip:hover svg {
+  color: var(--primary);
+}
+

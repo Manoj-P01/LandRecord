@@ -90,6 +90,10 @@ const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
 const toastContainer = document.getElementById('toastContainer');
 
 let activeDeleteId = null;
+let tempAttachments = {
+  document: null,
+  ec: null
+};
 
 // -------------------------------------------------------------
 // Unit Conversion Helper Constants
@@ -286,7 +290,7 @@ function resetDocumentInputs(docOwners = [], sellers = []) {
 // -------------------------------------------------------------
 // Hierarchical Pattas & Parcels Management
 // -------------------------------------------------------------
-function addPattaInputBlock(pattaNumber = '', isPattaTransferred = false, pattaNames = [], parcels = []) {
+function addPattaInputBlock(pattaNumber = '', isPattaTransferred = false, pattaNames = [], parcels = [], attachment = null) {
   const block = document.createElement('div');
   block.className = 'patta-block';
   block.innerHTML = `
@@ -344,6 +348,28 @@ function addPattaInputBlock(pattaNumber = '', isPattaTransferred = false, pattaN
         Add Land Parcel
       </button>
     </div>
+
+    <!-- Patta Attachment Section -->
+    <div class="form-group patta-attachment-box" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,0.05);">
+      <label style="font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.05em; display: block; margin-bottom: 6px;">Patta Copy (Optional)</label>
+      <div class="upload-area patta-upload-area" style="min-height: 50px; padding: 10px; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; color: var(--text-muted);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span style="font-size: 0.75rem;">Upload Patta</span>
+        <input type="file" class="patta-file-input" accept="application/pdf,image/*" style="display: none;">
+      </div>
+      <div class="attachment-status patta-attachment-status hidden" style="min-height: 50px; padding: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+        <span class="attachment-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </span>
+        <span class="attachment-name patta-attachment-name" style="font-size: 0.75rem;"></span>
+        <div class="attachment-actions">
+          <a href="#" target="_blank" class="btn-view-attachment patta-view-link" title="View Patta" style="width: 20px; height: 20px;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 12px; height: 12px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>
+          <button type="button" class="btn-remove-attachment patta-remove-btn" title="Delete Attachment" style="width: 20px; height: 20px; font-size: 1rem;">&times;</button>
+        </div>
+      </div>
+    </div>
   `;
 
   pattasContainer.appendChild(block);
@@ -355,6 +381,74 @@ function addPattaInputBlock(pattaNumber = '', isPattaTransferred = false, pattaN
   const removeBlockBtn = block.querySelector('.remove-patta-btn');
   const statusCheckbox = block.querySelector('.patta-status-checkbox');
   const statusDescLabel = block.querySelector('.patta-status-desc-label');
+
+  const uploadArea = block.querySelector('.patta-upload-area');
+  const fileInput = block.querySelector('.patta-file-input');
+  const statusDiv = block.querySelector('.patta-attachment-status');
+  const nameSpan = block.querySelector('.patta-attachment-name');
+  const viewLink = block.querySelector('.patta-view-link');
+  const removeBtn = block.querySelector('.patta-remove-btn');
+
+  function updatePattaBlockUI(att) {
+    if (att && att.fileUrl) {
+      uploadArea.classList.add('hidden');
+      statusDiv.classList.remove('hidden');
+      nameSpan.innerText = att.fileName || 'Patta File';
+      viewLink.href = att.fileUrl;
+      viewLink.classList.remove('hidden');
+    } else {
+      uploadArea.classList.remove('hidden');
+      statusDiv.classList.add('hidden');
+      nameSpan.innerText = '';
+      viewLink.href = '#';
+      viewLink.classList.add('hidden');
+    }
+  }
+
+  uploadArea.addEventListener('click', () => {
+    const isEditable = !document.getElementById('documentNumber').disabled;
+    if (isEditable) {
+      fileInput.click();
+    }
+  });
+
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 15 * 1024 * 1024) {
+      showToast('File is too large. Maximum size is 15MB.', 'error');
+      fileInput.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      block.pattaAttachmentData = {
+        name: file.name,
+        base64: evt.target.result
+      };
+      updatePattaBlockUI({
+        fileName: file.name,
+        fileUrl: URL.createObjectURL(file)
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+
+  removeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isEditable = !document.getElementById('documentNumber').disabled;
+    if (!isEditable) return;
+
+    block.pattaAttachmentData = { delete: true };
+    fileInput.value = '';
+    updatePattaBlockUI(null);
+  });
+
+  if (attachment) {
+    updatePattaBlockUI(attachment);
+  }
 
   // Hook up Status Switch Change Listener
   statusCheckbox.addEventListener('change', () => {
@@ -466,7 +560,7 @@ function resetPattaInputs(pattas = []) {
     addPattaInputBlock();
   } else {
     pattas.forEach(p => {
-      addPattaInputBlock(p.pattaNumber, p.isPattaTransferred, p.pattaNames, p.parcels);
+      addPattaInputBlock(p.pattaNumber, p.isPattaTransferred, p.pattaNames, p.parcels, p.attachment || null);
     });
   }
 }
@@ -553,6 +647,54 @@ function toggleFormEditable(editable) {
     sw.style.pointerEvents = editable ? 'auto' : 'none';
   });
 
+  // Toggle remove buttons on attachments
+  document.querySelectorAll('.btn-remove-attachment').forEach(btn => {
+    btn.style.display = editable ? 'inline-flex' : 'none';
+  });
+
+  // Handle upload boxes visibility when viewing
+  ['document', 'ec'].forEach(type => {
+    const box = document.getElementById(`uploadBox${type.charAt(0).toUpperCase() + type.slice(1)}`);
+    if (!box) return;
+    const hasFile = state.activeRecord && state.activeRecord.attachments && state.activeRecord.attachments[type];
+    const tempFile = tempAttachments[type] && !tempAttachments[type].delete;
+
+    if (!editable) {
+      // View mode
+      if (hasFile || tempFile) {
+        box.classList.remove('hidden');
+      } else {
+        box.classList.add('hidden');
+      }
+    } else {
+      // Edit/Add mode
+      box.classList.remove('hidden');
+    }
+  });
+
+  // Handle patta-level upload boxes visibility & interactions when viewing/editing
+  document.querySelectorAll('.patta-block').forEach(block => {
+    const uploadArea = block.querySelector('.patta-upload-area');
+    const statusDiv = block.querySelector('.patta-attachment-status');
+    const removeBtn = block.querySelector('.patta-remove-btn');
+    
+    if (removeBtn) {
+      removeBtn.style.display = editable ? 'inline-flex' : 'none';
+    }
+
+    const hasFile = statusDiv && !statusDiv.classList.contains('hidden');
+
+    if (!editable) {
+      if (uploadArea && !hasFile) {
+        uploadArea.classList.add('hidden');
+      }
+    } else {
+      if (uploadArea && !hasFile) {
+        uploadArea.classList.remove('hidden');
+      }
+    }
+  });
+
   // Toggle action buttons visibility
   if (editable) {
     saveRecordBtn.classList.remove('hidden');
@@ -570,6 +712,30 @@ function toggleFormEditable(editable) {
   }
 }
 
+function updateAttachmentUI(type, attachmentObj) {
+  const name = type.charAt(0).toUpperCase() + type.slice(1);
+  const uploadArea = document.getElementById(`area${name}`);
+  const statusDiv = document.getElementById(`status${name}`);
+  const nameSpan = document.getElementById(`name${name}`);
+  const viewLink = document.getElementById(`view${name}`);
+
+  if (!uploadArea || !statusDiv) return;
+
+  if (attachmentObj && attachmentObj.fileUrl) {
+    uploadArea.classList.add('hidden');
+    statusDiv.classList.remove('hidden');
+    nameSpan.innerText = attachmentObj.fileName || `${name} File`;
+    viewLink.href = attachmentObj.fileUrl;
+    viewLink.classList.remove('hidden');
+  } else {
+    uploadArea.classList.remove('hidden');
+    statusDiv.classList.add('hidden');
+    nameSpan.innerText = '';
+    viewLink.href = '#';
+    viewLink.classList.add('hidden');
+  }
+}
+
 // -------------------------------------------------------------
 // Drawer Controller
 // -------------------------------------------------------------
@@ -578,6 +744,18 @@ function openDrawer(record = null) {
   drawerOverlay.classList.add('active');
   document.body.style.overflow = 'hidden'; // Stop background scrolling
   state.activeRecord = record;
+
+  // Reset temp attachment state
+  tempAttachments = {
+    document: null,
+    ec: null
+  };
+
+  // Reset file inputs
+  ['fileDocument', 'fileEc'].forEach(id => {
+    const inp = document.getElementById(id);
+    if (inp) inp.value = '';
+  });
 
   if (record) {
     // View Mode (details view)
@@ -610,6 +788,11 @@ function openDrawer(record = null) {
     // Dynamic pattas list
     resetPattaInputs(record.pattas || []);
 
+    // Populate attachments UI
+    const atts = record.attachments || {};
+    updateAttachmentUI('document', atts.document);
+    updateAttachmentUI('ec', atts.ec);
+
     // Disable all inputs for viewing
     toggleFormEditable(false);
   } else {
@@ -629,6 +812,10 @@ function openDrawer(record = null) {
     resetDocumentInputs();
     resetPattaInputs();
     
+    // Reset attachments UI
+    updateAttachmentUI('document', null);
+    updateAttachmentUI('ec', null);
+
     // Enable inputs
     toggleFormEditable(true);
   }
@@ -845,13 +1032,46 @@ recordForm.addEventListener('submit', async (e) => {
       }
     });
 
+    let uploadedAttachment = null;
+    let attachmentObj = null;
+
+    if (block.pattaAttachmentData) {
+      uploadedAttachment = block.pattaAttachmentData;
+    } else {
+      const viewLink = block.querySelector('.patta-view-link');
+      const nameSpan = block.querySelector('.patta-attachment-name');
+      const hasFile = viewLink && viewLink.href && viewLink.href !== '#' && !viewLink.classList.contains('hidden');
+      
+      if (hasFile && !viewLink.href.startsWith('blob:')) {
+        try {
+          const urlPath = new URL(viewLink.href).pathname;
+          attachmentObj = {
+            fileName: nameSpan.innerText,
+            fileUrl: urlPath
+          };
+        } catch (e) {
+          attachmentObj = {
+            fileName: nameSpan.innerText,
+            fileUrl: viewLink.getAttribute('href')
+          };
+        }
+      }
+    }
+
     if (pattaNumber && parcels.length > 0) {
-      pattasVal.push({
+      const pattaRecord = {
         pattaNumber,
         isPattaTransferred,
         pattaNames,
         parcels
-      });
+      };
+      if (uploadedAttachment) {
+        pattaRecord.uploadedAttachment = uploadedAttachment;
+      }
+      if (attachmentObj) {
+        pattaRecord.attachment = attachmentObj;
+      }
+      pattasVal.push(pattaRecord);
     }
   });
 
@@ -864,7 +1084,8 @@ recordForm.addEventListener('submit', async (e) => {
     district: districtVal,
     sro: sroVal,
     village: villageVal,
-    notes: notesTextarea.value.trim()
+    notes: notesTextarea.value.trim(),
+    uploadedAttachments: tempAttachments
   };
 
   const url = id ? `/api/records/${id}` : '/api/records';
@@ -1241,9 +1462,16 @@ function renderRecordsList() {
           </div>`;
         }).join('') : '';
 
+        const pattaAttachmentLink = (p.attachment && p.attachment.fileUrl) ? `
+          <a href="${p.attachment.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" title="${p.attachment.fileName}" style="font-size: 0.65rem; padding: 2px 6px; margin-left: 6px; display: inline-flex; align-items: center; gap: 4px; height: 18px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            File
+          </a>
+        ` : '';
+
         return `<div class="patta-summary-block" style="background-color: rgba(255,255,255,0.015); border: 1px solid var(--border-color); border-radius: var(--radius-xs); padding: 8px 12px; display: flex; flex-direction: column; gap: 6px;">
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
-            <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary);">Patta: <strong>${p.pattaNumber}</strong></span>
+            <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">Patta: <strong>${p.pattaNumber}</strong>${pattaAttachmentLink}</span>
             <span class="patta-status-tag ${pattaStatusClass}" style="font-size: 0.65rem; padding: 2px 6px;">${pattaStatusText}</span>
           </div>
           ${pattaOwnersList ? `<div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;"><span style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); font-weight: 500;">Owners:</span> ${pattaOwnersList}</div>` : ''}
@@ -1308,6 +1536,38 @@ function renderRecordsList() {
             ${pattasHtml}
           </div>
         </div>
+        ${(function() {
+          const atts = record.attachments || {};
+          const hasDocument = atts.document && atts.document.fileUrl;
+          const hasEc = atts.ec && atts.ec.fileUrl;
+
+          if (hasDocument || hasEc) {
+            const docLink = hasDocument ? `
+              <a href="${atts.document.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" title="${atts.document.fileName}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Deed
+              </a>
+            ` : '';
+
+            const ecLink = hasEc ? `
+              <a href="${atts.ec.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" title="${atts.ec.fileName}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                EC Copy
+              </a>
+            ` : '';
+
+            return `
+              <div class="info-item" style="grid-column: span 2;">
+                <span class="lbl">Attachments</span>
+                <div class="card-attachments">
+                  ${docLink}
+                  ${ecLink}
+                </div>
+              </div>
+            `;
+          }
+          return '';
+        })()}
       </div>
 
       ${record.notes ? `
@@ -1580,7 +1840,66 @@ ecModal.querySelectorAll('.copy-btn').forEach(btn => {
 // -------------------------------------------------------------
 // App Initialization
 // -------------------------------------------------------------
+function initAttachmentsHandlers() {
+  ['Document', 'Ec'].forEach(name => {
+    const area = document.getElementById(`area${name}`);
+    const fileInput = document.getElementById(`file${name}`);
+    const type = name.toLowerCase();
+
+    if (!area || !fileInput) return;
+
+    area.addEventListener('click', () => {
+      const isEditable = !document.getElementById('documentNumber').disabled;
+      if (isEditable) {
+        fileInput.click();
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      if (file.size > 15 * 1024 * 1024) {
+        showToast('File is too large. Maximum size is 15MB.', 'error');
+        fileInput.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        tempAttachments[type] = {
+          name: file.name,
+          base64: evt.target.result
+        };
+        updateAttachmentUI(type, {
+          fileName: file.name,
+          fileUrl: URL.createObjectURL(file)
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+
+  document.querySelectorAll('.btn-remove-attachment').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isEditable = !document.getElementById('documentNumber').disabled;
+      if (!isEditable) return;
+
+      const type = btn.dataset.type;
+      const name = type.charAt(0).toUpperCase() + type.slice(1);
+      
+      tempAttachments[type] = { delete: true };
+      const fileInput = document.getElementById(`file${name}`);
+      if (fileInput) fileInput.value = '';
+      
+      updateAttachmentUI(type, null);
+    });
+  });
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   initTheme();
   fetchRecords();
+  initAttachmentsHandlers();
 });
