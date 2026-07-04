@@ -556,10 +556,7 @@
             "landType": "wet"
           }
         ],
-        "attachment": {
-          "fileName": "",
-          "fileUrl": "/"
-        }
+        "attachment": null
       },
       {
         "pattaNumber": "168",
@@ -579,10 +576,7 @@
             "landType": "wet"
           }
         ],
-        "attachment": {
-          "fileName": "",
-          "fileUrl": "/"
-        }
+        "attachment": null
       },
       {
         "pattaNumber": "1130",
@@ -604,10 +598,7 @@
             "landType": "well"
           }
         ],
-        "attachment": {
-          "fileName": "",
-          "fileUrl": "/"
-        }
+        "attachment": null
       }
     ],
     "district": "",
@@ -615,7 +606,7 @@
     "village": "",
     "notes": "",
     "createdAt": "2026-07-04T13:27:09.214Z",
-    "updatedAt": "2026-07-04T13:27:09.214Z",
+    "updatedAt": "2026-07-04T13:27:48.674Z",
     "pattaNumber": "57, 168, 1130",
     "pattaNames": [
       "Aandi",
