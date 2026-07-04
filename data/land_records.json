@@ -294,5 +294,87 @@
       "unit": "cent"
     },
     "attachments": {}
+  },
+  {
+    "id": "1783155255756",
+    "documentNumber": "1202/2002",
+    "documentOwnerName": [
+      "Subbaiya"
+    ],
+    "purchasedFrom": [
+      "Balasingam"
+    ],
+    "purchaseDate": "2002-11-14",
+    "pattas": [
+      {
+        "pattaNumber": "2790",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Pushparaj",
+          "Balasingam",
+          "Navaladiyan",
+          "Subbaiya"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "223",
+            "subDivision": "1C",
+            "landSize": {
+              "value": 15,
+              "unit": "are"
+            },
+            "landType": "wet"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      },
+      {
+        "pattaNumber": "1516",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Subbaiya"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "223",
+            "subDivision": "1B",
+            "landSize": {
+              "value": 2.5,
+              "unit": "are"
+            },
+            "landType": "dry"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      }
+    ],
+    "district": "",
+    "sro": "",
+    "village": "",
+    "notes": "",
+    "createdAt": "2026-07-04T08:54:15.756Z",
+    "updatedAt": "2026-07-04T08:54:15.756Z",
+    "pattaNumber": "2790, 1516",
+    "pattaNames": [
+      "Pushparaj",
+      "Balasingam",
+      "Navaladiyan",
+      "Subbaiya"
+    ],
+    "isPattaTransferred": true,
+    "surveyNumber": "223",
+    "subDivision": "1C",
+    "landType": "wet",
+    "landSize": {
+      "value": 43.2434,
+      "unit": "cent"
+    },
+    "attachments": {}
   }
 ]
