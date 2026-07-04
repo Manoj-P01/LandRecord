@@ -740,10 +740,7 @@
             "landType": "dry"
           }
         ],
-        "attachment": {
-          "fileName": "",
-          "fileUrl": "/"
-        }
+        "attachment": null
       }
     ],
     "district": "",
@@ -751,7 +748,7 @@
     "village": "",
     "notes": "",
     "createdAt": "2026-07-04T13:40:44.867Z",
-    "updatedAt": "2026-07-04T13:40:44.867Z",
+    "updatedAt": "2026-07-04T13:41:44.312Z",
     "pattaNumber": "1560",
     "pattaNames": [
       "Subbaiya+ 18"
