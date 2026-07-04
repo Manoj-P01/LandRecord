@@ -767,10 +767,10 @@
     "id": "1783174494333",
     "documentNumber": "409/1972",
     "documentOwnerName": [
-      "Partition deed"
+      "Subbaiya + Partition deed"
     ],
     "purchasedFrom": [
-      "Partition deed"
+      "Subbaiya+ partition deed"
     ],
     "purchaseDate": "1972-05-12",
     "pattas": [
@@ -791,7 +791,10 @@
             "landType": "dry"
           }
         ],
-        "attachment": null
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
       }
     ],
     "district": "",
@@ -799,7 +802,7 @@
     "village": "",
     "notes": "",
     "createdAt": "2026-07-04T14:14:54.333Z",
-    "updatedAt": "2026-07-04T14:15:05.809Z",
+    "updatedAt": "2026-07-04T14:19:58.712Z",
     "pattaNumber": "175",
     "pattaNames": [
       "Subbaiya"
