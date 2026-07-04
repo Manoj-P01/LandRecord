@@ -283,5 +283,61 @@
       "unit": "cent"
     },
     "attachments": {}
+  },
+  {
+    "id": "1783159686516",
+    "documentNumber": "1055/2012",
+    "documentOwnerName": [
+      "Subbaiya"
+    ],
+    "purchasedFrom": [
+      "Santhanam"
+    ],
+    "purchaseDate": "2012-05-07",
+    "pattas": [
+      {
+        "pattaNumber": "243",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Santhanam",
+          "Subbaiya"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "194",
+            "subDivision": "6B",
+            "landSize": {
+              "value": 6.5,
+              "unit": "are"
+            },
+            "landType": "wet"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      }
+    ],
+    "district": "",
+    "sro": "",
+    "village": "",
+    "notes": "Need to remove other name",
+    "createdAt": "2026-07-04T10:08:06.516Z",
+    "updatedAt": "2026-07-04T10:08:06.516Z",
+    "pattaNumber": "243",
+    "pattaNames": [
+      "Santhanam",
+      "Subbaiya"
+    ],
+    "isPattaTransferred": true,
+    "surveyNumber": "194",
+    "subDivision": "6B",
+    "landType": "wet",
+    "landSize": {
+      "value": 16.0618,
+      "unit": "cent"
+    },
+    "attachments": {}
   }
 ]
