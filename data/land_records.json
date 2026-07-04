@@ -762,5 +762,59 @@
       "unit": "cent"
     },
     "attachments": {}
+  },
+  {
+    "id": "1783174494333",
+    "documentNumber": "409/1972",
+    "documentOwnerName": [
+      "Partition deed"
+    ],
+    "purchasedFrom": [
+      "Partition deed"
+    ],
+    "purchaseDate": "1972-05-12",
+    "pattas": [
+      {
+        "pattaNumber": "175",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Subbaiya"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "266",
+            "subDivision": "7A",
+            "landSize": {
+              "value": 27,
+              "unit": "are"
+            },
+            "landType": "dry"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      }
+    ],
+    "district": "",
+    "sro": "",
+    "village": "",
+    "notes": "",
+    "createdAt": "2026-07-04T14:14:54.333Z",
+    "updatedAt": "2026-07-04T14:14:54.333Z",
+    "pattaNumber": "175",
+    "pattaNames": [
+      "Subbaiya"
+    ],
+    "isPattaTransferred": true,
+    "surveyNumber": "266",
+    "subDivision": "7A",
+    "landType": "dry",
+    "landSize": {
+      "value": 66.7185,
+      "unit": "cent"
+    },
+    "attachments": {}
   }
 ]
