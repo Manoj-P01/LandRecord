@@ -366,10 +366,7 @@
             "landType": "wet"
           }
         ],
-        "attachment": {
-          "fileName": "",
-          "fileUrl": "/"
-        }
+        "attachment": null
       },
       {
         "pattaNumber": "1030",
@@ -388,10 +385,7 @@
             "landType": "wet"
           }
         ],
-        "attachment": {
-          "fileName": "",
-          "fileUrl": "/"
-        }
+        "attachment": null
       }
     ],
     "district": "",
@@ -399,7 +393,7 @@
     "village": "",
     "notes": "Clear",
     "createdAt": "2026-07-04T10:16:04.963Z",
-    "updatedAt": "2026-07-04T10:16:04.963Z",
+    "updatedAt": "2026-07-04T10:16:54.151Z",
     "pattaNumber": "2791, 1030",
     "pattaNames": [
       "Subbaiya"
