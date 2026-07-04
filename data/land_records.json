@@ -49,55 +49,6 @@
     "updatedAt": "2026-07-01T05:37:28.315Z"
   },
   {
-    "id": "1782885057704",
-    "surveyNumber": "266",
-    "subDivision": "6B",
-    "pattaNumber": "271",
-    "documentNumber": "57/1992",
-    "isPattaTransferred": false,
-    "documentOwnerName": [
-      "Pappammal"
-    ],
-    "pattaNames": [
-      "Pappammal"
-    ],
-    "landSize": {
-      "value": 40.75,
-      "unit": "cent"
-    },
-    "landType": "dry",
-    "purchaseDate": "1992-01-27",
-    "purchasedFrom": [
-      "Balakumar"
-    ],
-    "district": "",
-    "sro": "",
-    "village": "",
-    "notes": "",
-    "pattas": [
-      {
-        "pattaNumber": "271",
-        "isPattaTransferred": false,
-        "pattaNames": [
-          "Pappammal"
-        ],
-        "parcels": [
-          {
-            "surveyNumber": "266",
-            "subDivision": "6B",
-            "landSize": {
-              "value": 40.75,
-              "unit": "cent"
-            },
-            "landType": "dry"
-          }
-        ]
-      }
-    ],
-    "createdAt": "2026-07-01T05:50:57.704Z",
-    "updatedAt": "2026-07-01T05:50:57.704Z"
-  },
-  {
     "id": "1782871155065",
     "surveyNumber": "192",
     "subDivision": "11B",
