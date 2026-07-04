@@ -207,5 +207,92 @@
       "unit": "cent"
     },
     "attachments": {}
+  },
+  {
+    "id": "1783150557305",
+    "documentNumber": "376/1994",
+    "documentOwnerName": [
+      "Subbaiya"
+    ],
+    "purchasedFrom": [
+      "Periyasamy",
+      "Mookayiammal"
+    ],
+    "purchaseDate": "1994-05-04",
+    "pattas": [
+      {
+        "pattaNumber": "1040",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Subbaiya"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "223",
+            "subDivision": "1A",
+            "landSize": {
+              "value": 16.5,
+              "unit": "are"
+            },
+            "landType": "wet"
+          }
+        ],
+        "attachment": null
+      },
+      {
+        "pattaNumber": "1516",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Veeramalai",
+          "Ponnan",
+          "Arumugam",
+          "Marimuthu",
+          "Periyasamy",
+          "Pookaye",
+          "Pushparaj",
+          "Balasingam",
+          "Subbaiya"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "223",
+            "subDivision": "1B",
+            "landSize": {
+              "value": 2.5,
+              "unit": "are"
+            },
+            "landType": "well"
+          }
+        ],
+        "attachment": null
+      }
+    ],
+    "district": "",
+    "sro": "",
+    "village": "",
+    "notes": "Need to remove all others name",
+    "createdAt": "2026-07-04T07:35:57.305Z",
+    "updatedAt": "2026-07-04T07:35:57.305Z",
+    "pattaNumber": "1040, 1516",
+    "pattaNames": [
+      "Subbaiya",
+      "Veeramalai",
+      "Ponnan",
+      "Arumugam",
+      "Marimuthu",
+      "Periyasamy",
+      "Pookaye",
+      "Pushparaj",
+      "Balasingam"
+    ],
+    "isPattaTransferred": true,
+    "surveyNumber": "223",
+    "subDivision": "1A",
+    "landType": "wet",
+    "landSize": {
+      "value": 46.95,
+      "unit": "cent"
+    },
+    "attachments": {}
   }
 ]
