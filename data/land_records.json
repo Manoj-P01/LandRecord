@@ -527,5 +527,111 @@
       "unit": "cent"
     },
     "attachments": {}
+  },
+  {
+    "id": "1783171629214",
+    "documentNumber": "781/2005",
+    "documentOwnerName": [
+      "Subbaiya"
+    ],
+    "purchasedFrom": [
+      "Ganesan (a) Muthaiyya"
+    ],
+    "purchaseDate": "2005-07-15",
+    "pattas": [
+      {
+        "pattaNumber": "57",
+        "isPattaTransferred": false,
+        "pattaNames": [
+          "Aandi"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "223",
+            "subDivision": "2A",
+            "landSize": {
+              "value": 14.5,
+              "unit": "are"
+            },
+            "landType": "wet"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      },
+      {
+        "pattaNumber": "168",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Ganesan",
+          "Subbaiya"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "223",
+            "subDivision": "2D",
+            "landSize": {
+              "value": 16,
+              "unit": "are"
+            },
+            "landType": "wet"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      },
+      {
+        "pattaNumber": "1130",
+        "isPattaTransferred": false,
+        "pattaNames": [
+          "Aandi",
+          "Muthaiya",
+          "Kandhan",
+          "Ganesan"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "223",
+            "subDivision": "14",
+            "landSize": {
+              "value": 9.5,
+              "unit": "are"
+            },
+            "landType": "well"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      }
+    ],
+    "district": "",
+    "sro": "",
+    "village": "",
+    "notes": "",
+    "createdAt": "2026-07-04T13:27:09.214Z",
+    "updatedAt": "2026-07-04T13:27:09.214Z",
+    "pattaNumber": "57, 168, 1130",
+    "pattaNames": [
+      "Aandi",
+      "Ganesan",
+      "Subbaiya",
+      "Muthaiya",
+      "Kandhan"
+    ],
+    "isPattaTransferred": false,
+    "surveyNumber": "223",
+    "subDivision": "2A",
+    "landType": "wet",
+    "landSize": {
+      "value": 98.8421,
+      "unit": "cent"
+    },
+    "attachments": {}
   }
 ]
