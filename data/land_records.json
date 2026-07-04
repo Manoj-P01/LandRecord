@@ -662,10 +662,7 @@
             "landType": "wet"
           }
         ],
-        "attachment": {
-          "fileName": "",
-          "fileUrl": "/"
-        }
+        "attachment": null
       },
       {
         "pattaNumber": "1516",
@@ -684,10 +681,7 @@
             "landType": "well"
           }
         ],
-        "attachment": {
-          "fileName": "",
-          "fileUrl": "/"
-        }
+        "attachment": null
       }
     ],
     "district": "",
@@ -695,7 +689,7 @@
     "village": "",
     "notes": "",
     "createdAt": "2026-07-04T13:36:45.163Z",
-    "updatedAt": "2026-07-04T13:36:45.163Z",
+    "updatedAt": "2026-07-04T13:37:15.560Z",
     "pattaNumber": "616, 1516",
     "pattaNames": [
       "Periyanan",
