@@ -336,5 +336,82 @@
       "unit": "cent"
     },
     "attachments": {}
+  },
+  {
+    "id": "1783160164962",
+    "documentNumber": "1414/2007",
+    "documentOwnerName": [
+      "Subbaiya"
+    ],
+    "purchasedFrom": [
+      "Sellamuthu",
+      "Pappayeammal"
+    ],
+    "purchaseDate": "2007-10-03",
+    "pattas": [
+      {
+        "pattaNumber": "2791",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Subbaiya"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "194",
+            "subDivision": "13A",
+            "landSize": {
+              "value": 23,
+              "unit": "are"
+            },
+            "landType": "wet"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      },
+      {
+        "pattaNumber": "1030",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Subbaiya"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "194",
+            "subDivision": "13B",
+            "landSize": {
+              "value": 22.5,
+              "unit": "are"
+            },
+            "landType": "wet"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      }
+    ],
+    "district": "",
+    "sro": "",
+    "village": "",
+    "notes": "Clear",
+    "createdAt": "2026-07-04T10:16:04.963Z",
+    "updatedAt": "2026-07-04T10:16:04.963Z",
+    "pattaNumber": "2791, 1030",
+    "pattaNames": [
+      "Subbaiya"
+    ],
+    "isPattaTransferred": true,
+    "surveyNumber": "194",
+    "subDivision": "13A",
+    "landType": "wet",
+    "landSize": {
+      "value": 112.4329,
+      "unit": "cent"
+    },
+    "attachments": {}
   }
 ]
