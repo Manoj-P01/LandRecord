@@ -313,10 +313,7 @@
             "landType": "wet"
           }
         ],
-        "attachment": {
-          "fileName": "",
-          "fileUrl": "/"
-        }
+        "attachment": null
       }
     ],
     "district": "",
@@ -324,7 +321,7 @@
     "village": "",
     "notes": "Need to remove other name",
     "createdAt": "2026-07-04T10:08:06.516Z",
-    "updatedAt": "2026-07-04T10:08:06.516Z",
+    "updatedAt": "2026-07-04T10:09:58.108Z",
     "pattaNumber": "243",
     "pattaNames": [
       "Santhanam",
