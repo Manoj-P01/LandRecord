@@ -407,5 +407,137 @@
       "unit": "cent"
     },
     "attachments": {}
+  },
+  {
+    "id": "1783170930629",
+    "documentNumber": "94/2009",
+    "documentOwnerName": [
+      "Subbaiya"
+    ],
+    "purchasedFrom": [
+      "Valliyammal",
+      "Raja",
+      "Periyasamy",
+      "Sankaralingam",
+      "Nachayie"
+    ],
+    "purchaseDate": "2009-01-27",
+    "pattas": [
+      {
+        "pattaNumber": "495",
+        "isPattaTransferred": false,
+        "pattaNames": [
+          "Nachan"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "192",
+            "subDivision": "11B",
+            "landSize": {
+              "value": 10,
+              "unit": "are"
+            },
+            "landType": "wet"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      },
+      {
+        "pattaNumber": "1041",
+        "isPattaTransferred": false,
+        "pattaNames": [
+          "Nachan",
+          "Periyasamy"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "223",
+            "subDivision": "3",
+            "landSize": {
+              "value": 37.5,
+              "unit": "are"
+            },
+            "landType": "wet"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      },
+      {
+        "pattaNumber": "1235",
+        "isPattaTransferred": false,
+        "pattaNames": [
+          "Palaniyapa moopan",
+          "Kupa moopan",
+          "Sellamal"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "166",
+            "subDivision": "1A",
+            "landSize": {
+              "value": 2,
+              "unit": "cent"
+            },
+            "landType": "dry"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      },
+      {
+        "pattaNumber": "1520",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Subbaiya"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "192",
+            "subDivision": "4",
+            "landSize": {
+              "value": 11,
+              "unit": "cent"
+            },
+            "landType": "well"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      }
+    ],
+    "district": "",
+    "sro": "",
+    "village": "",
+    "notes": "",
+    "createdAt": "2026-07-04T13:15:30.629Z",
+    "updatedAt": "2026-07-04T13:15:30.629Z",
+    "pattaNumber": "495, 1041, 1235, 1520",
+    "pattaNames": [
+      "Nachan",
+      "Periyasamy",
+      "Palaniyapa moopan",
+      "Kupa moopan",
+      "Sellamal",
+      "Subbaiya"
+    ],
+    "isPattaTransferred": false,
+    "surveyNumber": "192",
+    "subDivision": "11B",
+    "landType": "wet",
+    "landSize": {
+      "value": 130.3751,
+      "unit": "cent"
+    },
+    "attachments": {}
   }
 ]
