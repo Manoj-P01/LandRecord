@@ -711,5 +711,59 @@
       "unit": "cent"
     },
     "attachments": {}
+  },
+  {
+    "id": "1783172444867",
+    "documentNumber": "726/1983",
+    "documentOwnerName": [
+      "Subbaiya"
+    ],
+    "purchasedFrom": [
+      "Sappani"
+    ],
+    "purchaseDate": "1983-09-06",
+    "pattas": [
+      {
+        "pattaNumber": "1560",
+        "isPattaTransferred": true,
+        "pattaNames": [
+          "Subbaiya+ 18"
+        ],
+        "parcels": [
+          {
+            "surveyNumber": "162",
+            "subDivision": "2",
+            "landSize": {
+              "value": 90,
+              "unit": "cent"
+            },
+            "landType": "dry"
+          }
+        ],
+        "attachment": {
+          "fileName": "",
+          "fileUrl": "/"
+        }
+      }
+    ],
+    "district": "",
+    "sro": "",
+    "village": "",
+    "notes": "",
+    "createdAt": "2026-07-04T13:40:44.867Z",
+    "updatedAt": "2026-07-04T13:40:44.867Z",
+    "pattaNumber": "1560",
+    "pattaNames": [
+      "Subbaiya+ 18"
+    ],
+    "isPattaTransferred": true,
+    "surveyNumber": "162",
+    "subDivision": "2",
+    "landType": "dry",
+    "landSize": {
+      "value": 90,
+      "unit": "cent"
+    },
+    "attachments": {}
   }
 ]
