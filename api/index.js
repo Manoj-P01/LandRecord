@@ -111,6 +111,17 @@ function resolveDocumentFallbacks(record) {
   return record;
 }
 
+function safeUnlinkLocalAttachment(fileUrl) {
+  if (typeof fileUrl === 'string' && fileUrl.startsWith('/attachments/')) {
+    const oldFilePath = path.join(process.cwd(), 'public', fileUrl);
+    try {
+      if (fs.existsSync(oldFilePath) && fs.statSync(oldFilePath).isFile()) {
+        fs.unlinkSync(oldFilePath);
+      }
+    } catch (e) {}
+  }
+}
+
 function saveAttachments(recordId, uploadedAttachments, currentAttachments = {}, pattas = []) {
   const attachments = { ...currentAttachments };
   const recordDir = path.join(process.cwd(), 'public', 'attachments', recordId);
@@ -123,23 +134,21 @@ function saveAttachments(recordId, uploadedAttachments, currentAttachments = {},
     fs.mkdirSync(recordDir, { recursive: true });
   }
 
-  // 1. Process record-level attachments (document and ec)
+  // 1. Process record-level attachments (document, ec, fmb)
   if (uploadedAttachments) {
-    const types = ['document', 'ec'];
+    const types = ['document', 'ec', 'fmb'];
     for (const type of types) {
       const fileData = uploadedAttachments[type];
       if (fileData === null) continue;
 
       if (fileData && fileData.delete) {
-        if (attachments[type]) {
-          const oldFilePath = path.join(process.cwd(), 'public', attachments[type].fileUrl);
-          try { if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath); } catch (e) {}
+        if (attachments[type] && attachments[type].fileUrl) {
+          safeUnlinkLocalAttachment(attachments[type].fileUrl);
           attachments[type] = null;
         }
       } else if (fileData && fileData.base64) {
-        if (attachments[type]) {
-          const oldFilePath = path.join(process.cwd(), 'public', attachments[type].fileUrl);
-          try { if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath); } catch (e) {}
+        if (attachments[type] && attachments[type].fileUrl) {
+          safeUnlinkLocalAttachment(attachments[type].fileUrl);
         }
 
         const matches = fileData.base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
@@ -165,15 +174,13 @@ function saveAttachments(recordId, uploadedAttachments, currentAttachments = {},
       const fileData = patta.uploadedAttachment;
       
       if (fileData && fileData.delete) {
-        if (patta.attachment) {
-          const oldFilePath = path.join(process.cwd(), 'public', patta.attachment.fileUrl);
-          try { if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath); } catch (e) {}
+        if (patta.attachment && patta.attachment.fileUrl) {
+          safeUnlinkLocalAttachment(patta.attachment.fileUrl);
         }
         patta.attachment = null;
       } else if (fileData && fileData.base64) {
-        if (patta.attachment) {
-          const oldFilePath = path.join(process.cwd(), 'public', patta.attachment.fileUrl);
-          try { if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath); } catch (e) {}
+        if (patta.attachment && patta.attachment.fileUrl) {
+          safeUnlinkLocalAttachment(patta.attachment.fileUrl);
         }
 
         const matches = fileData.base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
@@ -189,22 +196,26 @@ function saveAttachments(recordId, uploadedAttachments, currentAttachments = {},
             uploadedAt: new Date().toISOString()
           };
         }
-      } else if (patta.attachment) {
+      } else if (patta.attachment && typeof patta.attachment.fileUrl === 'string') {
         const currentUrl = patta.attachment.fileUrl;
-        const currentExt = path.extname(currentUrl);
-        const expectedFileName = `patta_${idx}${currentExt}`;
-        const expectedUrl = `/attachments/${recordId}/${expectedFileName}`;
         
-        if (currentUrl !== expectedUrl) {
-          const currentFilePath = path.join(process.cwd(), 'public', currentUrl);
-          const expectedFilePath = path.join(recordDir, expectedFileName);
-          try {
-            if (fs.existsSync(currentFilePath)) {
-              fs.renameSync(currentFilePath, expectedFilePath);
-              patta.attachment.fileUrl = expectedUrl;
+        // Only rename local relative attachment files
+        if (currentUrl.startsWith('/attachments/')) {
+          const currentExt = path.extname(currentUrl);
+          const expectedFileName = `patta_${idx}${currentExt}`;
+          const expectedUrl = `/attachments/${recordId}/${expectedFileName}`;
+          
+          if (currentUrl !== expectedUrl) {
+            const currentFilePath = path.join(process.cwd(), 'public', currentUrl);
+            const expectedFilePath = path.join(recordDir, expectedFileName);
+            try {
+              if (fs.existsSync(currentFilePath) && fs.statSync(currentFilePath).isFile()) {
+                fs.renameSync(currentFilePath, expectedFilePath);
+                patta.attachment.fileUrl = expectedUrl;
+              }
+            } catch (e) {
+              console.error(`Failed to rename patta file from ${currentFilePath} to ${expectedFilePath}`, e);
             }
-          } catch (e) {
-            console.error(`Failed to rename patta file from ${currentFilePath} to ${expectedFilePath}`, e);
           }
         }
       }

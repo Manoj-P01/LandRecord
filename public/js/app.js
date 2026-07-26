@@ -3,13 +3,42 @@
 // -------------------------------------------------------------
 const state = {
   records: [],
+  nearbyRecords: [],
   searchQuery: '',
+  nearbySearchQuery: '',
+  activeView: 'myLands', // 'myLands' | 'nearbyLands'
   pattaFilter: 'all', // 'all' | 'transferred' | 'pending'
   landTypeFilter: 'all', // 'all' | 'wet' | 'dry' | 'residential' | 'commercial'
   nameFilter: 'all', // 'all' | '[name]'
   sortBy: 'newest', // 'newest' | 'oldest' | 'size-desc' | 'size-asc' | 'survey'
-  displayUnit: 'cent' // 'cent' | 'sqft' | 'acre'
+  displayUnit: 'cent', // 'cent' | 'sqft' | 'acre'
+  supabaseClient: null,
+  currentUser: null,
+  isSupabaseConfigured: false
 };
+
+function isValidFileUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  return trimmed !== '' && trimmed !== '/' && trimmed !== '#' && trimmed !== 'null' && trimmed !== 'undefined';
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function formatTransfereeTotalArea(cents) {
+  const c = cents.toFixed(2);
+  const ac = (cents / 100).toFixed(4);
+  const sq = Math.round(cents * 435.6).toLocaleString();
+  return `${c} Cents (${ac} Acre | ${sq} Sq Ft)`;
+}
 
 // -------------------------------------------------------------
 // DOM Elements
@@ -56,6 +85,25 @@ const district = document.getElementById('district');
 const sro = document.getElementById('sro');
 const village = document.getElementById('village');
 
+// Auth & Supabase DOM Elements
+const openAuthModalBtn = document.getElementById('openAuthModalBtn');
+const userBadge = document.getElementById('userBadge');
+const userAvatar = document.getElementById('userAvatar');
+const userEmailText = document.getElementById('userEmailText');
+const logoutBtn = document.getElementById('logoutBtn');
+
+const authModal = document.getElementById('authModal');
+const authOverlay = document.getElementById('authOverlay');
+const authCloseBtn = document.getElementById('authCloseBtn');
+const tabLoginBtn = document.getElementById('tabLoginBtn');
+const tabSignupBtn = document.getElementById('tabSignupBtn');
+const loginForm = document.getElementById('loginForm');
+const signupForm = document.getElementById('signupForm');
+const loginEmail = document.getElementById('loginEmail');
+const loginPassword = document.getElementById('loginPassword');
+const signupEmail = document.getElementById('signupEmail');
+const signupPassword = document.getElementById('signupPassword');
+
 // EC Modal Elements
 const ecOverlay = document.getElementById('ecOverlay');
 const ecModal = document.getElementById('ecModal');
@@ -92,8 +140,300 @@ const toastContainer = document.getElementById('toastContainer');
 let activeDeleteId = null;
 let tempAttachments = {
   document: null,
-  ec: null
+  ec: null,
+  fmb: null
 };
+
+// -------------------------------------------------------------
+// Supabase Authentication & Storage Manager
+// -------------------------------------------------------------
+const DEFAULT_SUPABASE_URL = 'https://qmklpsxnvvwsqhgqareq.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_fxcrFk5jWCf64uoJ212k3A_XneKuPgZ';
+
+function initSupabase() {
+  const url = DEFAULT_SUPABASE_URL;
+  const key = DEFAULT_SUPABASE_KEY;
+  const subtitleEl = document.getElementById('storageModeSubtitle');
+  const activeDbModeText = document.getElementById('activeDbModeText');
+
+  if (url && key && window.supabase) {
+    try {
+      const client = window.supabase.createClient(url, key);
+      state.supabaseClient = client;
+      state.isSupabaseConfigured = true;
+
+      if (subtitleEl) subtitleEl.innerText = 'Supabase Cloud Database';
+      if (activeDbModeText) activeDbModeText.innerText = `Supabase Cloud (${new URL(url).hostname})`;
+
+      // Load saved user session
+      const savedUserStr = localStorage.getItem('logged_user');
+      if (savedUserStr) {
+        try {
+          state.currentUser = JSON.parse(savedUserStr);
+        } catch (e) {
+          state.currentUser = null;
+        }
+      } else {
+        state.currentUser = null;
+      }
+
+      updateAuthUI();
+      fetchRecords();
+      return;
+    } catch (e) {
+      console.error('Failed to initialize Supabase client:', e);
+    }
+  }
+
+  // Fallback mode
+  state.supabaseClient = null;
+  state.isSupabaseConfigured = false;
+  if (subtitleEl) subtitleEl.innerText = 'Supabase Cloud Database';
+  if (activeDbModeText) activeDbModeText.innerText = 'Supabase Cloud Database';
+  updateAuthUI();
+}
+
+function updateAuthUI() {
+  if (state.currentUser) {
+    if (userBadge) userBadge.classList.remove('hidden');
+    if (openAuthModalBtn) openAuthModalBtn.classList.add('hidden');
+    if (userAvatar) userAvatar.innerText = (state.currentUser.email || 'U').charAt(0).toUpperCase();
+    if (userEmailText) userEmailText.innerText = state.currentUser.email || 'Logged In';
+  } else {
+    if (userBadge) userBadge.classList.add('hidden');
+    if (openAuthModalBtn) openAuthModalBtn.classList.remove('hidden');
+  }
+}
+
+// Modal Toggle Handlers
+function openAuthModal() {
+  if (authModal && authOverlay) {
+    authModal.classList.add('active');
+    authOverlay.classList.add('active');
+  }
+}
+
+function closeAuthModal() {
+  if (authModal && authOverlay) {
+    authModal.classList.remove('active');
+    authOverlay.classList.remove('active');
+  }
+}
+
+if (openAuthModalBtn) openAuthModalBtn.addEventListener('click', openAuthModal);
+if (authCloseBtn) authCloseBtn.addEventListener('click', closeAuthModal);
+if (authOverlay) authOverlay.addEventListener('click', closeAuthModal);
+
+if (tabLoginBtn && tabSignupBtn) {
+  tabLoginBtn.addEventListener('click', () => {
+    tabLoginBtn.classList.add('active');
+    tabSignupBtn.classList.remove('active');
+    loginForm.classList.remove('hidden');
+    signupForm.classList.add('hidden');
+  });
+
+  tabSignupBtn.addEventListener('click', () => {
+    tabSignupBtn.classList.add('active');
+    tabLoginBtn.classList.remove('active');
+    signupForm.classList.remove('hidden');
+    loginForm.classList.add('hidden');
+  });
+}
+
+if (loginForm) {
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!state.supabaseClient) {
+      showToast('Supabase client connection error.', 'error');
+      return;
+    }
+
+    const email = loginEmail.value.trim();
+    const password = loginPassword.value.trim();
+
+    try {
+      const { data, error } = await state.supabaseClient
+        .from('users')
+        .select('*')
+        .ilike('email', email)
+        .eq('password', password);
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        showToast('Invalid email or password. Please check your credentials.', 'error');
+        return;
+      }
+
+      const matchedUser = data[0];
+      state.currentUser = matchedUser;
+      localStorage.setItem('logged_user', JSON.stringify(matchedUser));
+
+      updateAuthUI();
+      showToast(`Welcome back, ${matchedUser.email}!`, 'success');
+      closeAuthModal();
+      fetchRecords();
+    } catch (err) {
+      console.error('Login error:', err);
+      showToast(err.message || 'Failed to log in.', 'error');
+    }
+  });
+}
+
+if (signupForm) {
+  signupForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!state.supabaseClient) {
+      showToast('Supabase client connection error.', 'error');
+      return;
+    }
+
+    const email = signupEmail.value.trim();
+    const password = signupPassword.value.trim();
+
+    try {
+      const newUser = { email, password, name: email.split('@')[0] };
+      const { data, error } = await state.supabaseClient
+        .from('users')
+        .insert([newUser])
+        .select();
+
+      if (error) throw error;
+
+      const createdUser = (data && data.length > 0) ? data[0] : newUser;
+      state.currentUser = createdUser;
+      localStorage.setItem('logged_user', JSON.stringify(createdUser));
+
+      updateAuthUI();
+      showToast('Account registered & logged in successfully!', 'success');
+      closeAuthModal();
+      fetchRecords();
+    } catch (err) {
+      console.error('Signup error:', err);
+      showToast(err.message || 'Failed to create user record.', 'error');
+    }
+  });
+}
+
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', () => {
+    localStorage.removeItem('logged_user');
+    state.currentUser = null;
+    updateAuthUI();
+    showToast('Signed out.', 'info');
+    fetchRecords();
+  });
+}
+
+
+
+// Upload file helper to Supabase Storage
+async function uploadFileToSupabase(fileData, pathPrefix) {
+  if (!state.supabaseClient || !fileData || !fileData.base64) return null;
+
+  try {
+    const matches = fileData.base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches) return null;
+
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: mimeType });
+
+    const ext = (fileData.name || 'document').split('.').pop() || 'bin';
+    const cleanPrefix = (pathPrefix || 'file').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filePath = `${cleanPrefix}_${Date.now()}.${ext}`;
+
+    const { data, error } = await state.supabaseClient.storage
+      .from('land_documents')
+      .upload(filePath, blob, { contentType: mimeType, upsert: true });
+
+    if (error) {
+      console.error('Supabase storage upload error:', error);
+      return null;
+    }
+
+    const { data: publicUrlData } = state.supabaseClient.storage
+      .from('land_documents')
+      .getPublicUrl(filePath);
+
+    return {
+      fileName: fileData.name,
+      fileUrl: publicUrlData.publicUrl,
+      uploadedAt: new Date().toISOString()
+    };
+  } catch (err) {
+    console.error('Error uploading file to Supabase:', err);
+    return null;
+  }
+}
+
+// -------------------------------------------------------------
+// Document Fallbacks & Computations
+// -------------------------------------------------------------
+function resolveDocumentFallbacks(record) {
+  if (!Array.isArray(record.pattas) || record.pattas.length === 0) {
+    if (!record.pattas) record.pattas = [];
+    return record;
+  }
+
+  // Comma-joined list of patta numbers
+  const pattaNumbers = record.pattas
+    .map(p => (p.pattaNumber || '').trim())
+    .filter(Boolean);
+  record.pattaNumber = pattaNumbers.join(', ');
+
+  // Union of all patta names
+  const allPattaNames = new Set();
+  record.pattas.forEach(p => {
+    if (Array.isArray(p.pattaNames)) {
+      p.pattaNames.forEach(name => {
+        if (name && name.trim()) allPattaNames.add(name.trim());
+      });
+    }
+  });
+  record.pattaNames = Array.from(allPattaNames);
+
+  // isPattaTransferred: true if all pattas are transferred; false otherwise
+  record.isPattaTransferred = record.pattas.every(p => !!p.isPattaTransferred);
+
+  // Accumulate sizes and find first survey/subdivision/landType
+  let totalCents = 0;
+  let firstSurvey = '';
+  let firstSubdiv = '';
+  let firstType = 'dry';
+
+  record.pattas.forEach((p, pIndex) => {
+    if (Array.isArray(p.parcels)) {
+      p.parcels.forEach((parcel, parcelIndex) => {
+        if (pIndex === 0 && parcelIndex === 0) {
+          firstSurvey = (parcel.surveyNumber || '').trim();
+          firstSubdiv = (parcel.subDivision || '').trim();
+          firstType = (parcel.landType || 'dry').trim().toLowerCase();
+        }
+        if (parcel.landSize && parcel.landSize.value) {
+          const conv = convertUnits(parcel.landSize.value, parcel.landSize.unit);
+          totalCents += conv.cents;
+        }
+      });
+    }
+  });
+
+  record.surveyNumber = firstSurvey;
+  record.subDivision = firstSubdiv;
+  record.landType = firstType;
+  record.landSize = {
+    value: parseFloat(totalCents.toFixed(4)),
+    unit: 'cent'
+  };
+
+  return record;
+}
 
 // -------------------------------------------------------------
 // Unit Conversion Helper Constants
@@ -389,12 +729,14 @@ function addPattaInputBlock(pattaNumber = '', isPattaTransferred = false, pattaN
   const viewLink = block.querySelector('.patta-view-link');
   const removeBtn = block.querySelector('.patta-remove-btn');
 
+
   function updatePattaBlockUI(att) {
-    if (att && att.fileUrl) {
+    const validUrl = att && isValidFileUrl(att.fileUrl) ? att.fileUrl : null;
+    if (validUrl) {
       uploadArea.classList.add('hidden');
       statusDiv.classList.remove('hidden');
       nameSpan.innerText = att.fileName || 'Patta File';
-      viewLink.href = att.fileUrl;
+      viewLink.href = validUrl;
       viewLink.classList.remove('hidden');
     } else {
       uploadArea.classList.remove('hidden');
@@ -653,7 +995,7 @@ function toggleFormEditable(editable) {
   });
 
   // Handle upload boxes visibility when viewing
-  ['document', 'ec'].forEach(type => {
+  ['document', 'ec', 'fmb'].forEach(type => {
     const box = document.getElementById(`uploadBox${type.charAt(0).toUpperCase() + type.slice(1)}`);
     if (!box) return;
     const hasFile = state.activeRecord && state.activeRecord.attachments && state.activeRecord.attachments[type];
@@ -721,11 +1063,13 @@ function updateAttachmentUI(type, attachmentObj) {
 
   if (!uploadArea || !statusDiv) return;
 
-  if (attachmentObj && attachmentObj.fileUrl) {
+  const validUrl = attachmentObj && isValidFileUrl(attachmentObj.fileUrl) ? attachmentObj.fileUrl : null;
+
+  if (validUrl) {
     uploadArea.classList.add('hidden');
     statusDiv.classList.remove('hidden');
     nameSpan.innerText = attachmentObj.fileName || `${name} File`;
-    viewLink.href = attachmentObj.fileUrl;
+    viewLink.href = validUrl;
     viewLink.classList.remove('hidden');
   } else {
     uploadArea.classList.remove('hidden');
@@ -748,11 +1092,12 @@ function openDrawer(record = null) {
   // Reset temp attachment state
   tempAttachments = {
     document: null,
-    ec: null
+    ec: null,
+    fmb: null
   };
 
   // Reset file inputs
-  ['fileDocument', 'fileEc'].forEach(id => {
+  ['fileDocument', 'fileEc', 'fileFmb'].forEach(id => {
     const inp = document.getElementById(id);
     if (inp) inp.value = '';
   });
@@ -792,6 +1137,7 @@ function openDrawer(record = null) {
     const atts = record.attachments || {};
     updateAttachmentUI('document', atts.document);
     updateAttachmentUI('ec', atts.ec);
+    updateAttachmentUI('fmb', atts.fmb);
 
     // Disable all inputs for viewing
     toggleFormEditable(false);
@@ -815,6 +1161,7 @@ function openDrawer(record = null) {
     // Reset attachments UI
     updateAttachmentUI('document', null);
     updateAttachmentUI('ec', null);
+    updateAttachmentUI('fmb', null);
 
     // Enable inputs
     toggleFormEditable(true);
@@ -963,6 +1310,200 @@ function validateForm() {
   return isValid;
 }
 
+// -------------------------------------------------------------
+// Partition & Sale Deed Manager
+// -------------------------------------------------------------
+const partitionOverlay = document.getElementById('partitionOverlay');
+const partitionModal = document.getElementById('partitionModal');
+const partitionCloseBtn = document.getElementById('partitionCloseBtn');
+const partitionCancelBtn = document.getElementById('partitionCancelBtn');
+const partitionForm = document.getElementById('partitionForm');
+const partitionTargetPatta = document.getElementById('partitionTargetPatta');
+const partitionDate = document.getElementById('partitionDate');
+
+let activePartitionRecord = null;
+
+function openPartitionModal(record) {
+  if (!record) return;
+  activePartitionRecord = record;
+
+  const buyerInput = document.getElementById('partitionBuyerName');
+  const sizeInput = document.getElementById('partitionSizeValue');
+  const notesInput = document.getElementById('partitionNotes');
+
+  if (buyerInput) buyerInput.value = '';
+  if (sizeInput) sizeInput.value = '';
+  if (notesInput) notesInput.value = '';
+
+  // Populate target Patta & Parcel dropdown
+  if (partitionTargetPatta) {
+    partitionTargetPatta.innerHTML = '';
+    if (Array.isArray(record.pattas) && record.pattas.length > 0) {
+      record.pattas.forEach((p, pIdx) => {
+        if (Array.isArray(p.parcels)) {
+          p.parcels.forEach((parcel, parcelIdx) => {
+            const opt = document.createElement('option');
+            opt.value = `Patta ${p.pattaNumber} | Survey ${parcel.surveyNumber}${parcel.subDivision ? '/' + parcel.subDivision : ''} (${parcel.landSize.value} ${parcel.landSize.unit})`;
+            opt.innerText = opt.value;
+            partitionTargetPatta.appendChild(opt);
+          });
+        }
+      });
+    }
+  }
+
+  // Populate buyer name datalist with all previously used transferee names
+  const buyerDatalist = document.getElementById('buyerNameSuggestions');
+  if (buyerDatalist) {
+    const usedNames = new Set();
+    state.records.forEach(r => {
+      if (Array.isArray(r.partitions)) {
+        r.partitions.forEach(p => {
+          if (p.buyerName && p.buyerName.trim()) usedNames.add(p.buyerName.trim());
+        });
+      }
+    });
+    buyerDatalist.innerHTML = Array.from(usedNames).sort().map(name =>
+      `<option value="${escapeHtml(name)}"></option>`
+    ).join('');
+  }
+
+  // Populate Land Info Banner
+  const landInfoBanner = document.getElementById('partitionLandInfoBanner');
+  const landTypeEl = document.getElementById('partitionLandType');
+  const totalSizeEl = document.getElementById('partitionTotalSize');
+  const plannedSizeEl = document.getElementById('partitionPlannedSize');
+  const balanceSizeEl = document.getElementById('partitionBalanceSize');
+
+  if (landInfoBanner && record.landSize) {
+    const typeLabels = { wet: 'Wet (Nanjai)', dry: 'Dry (Punjai)', residential: 'Residential (Manai)', commercial: 'Commercial', well: 'Well (Kenaru)' };
+    const totalCents = convertUnits(record.landSize.value, record.landSize.unit).cents;
+
+    // Sum all existing planned partitions in cents
+    let plannedCents = 0;
+    if (Array.isArray(record.partitions)) {
+      record.partitions.forEach(p => {
+        plannedCents += convertUnits(p.size.value, p.size.unit).cents;
+      });
+    }
+    const balanceCents = totalCents - plannedCents;
+
+    if (landTypeEl) landTypeEl.textContent = typeLabels[record.landType || 'dry'] || 'Dry (Punjai)';
+    if (totalSizeEl) totalSizeEl.textContent = formatTransfereeTotalArea(totalCents);
+    if (plannedSizeEl) plannedSizeEl.textContent = plannedCents > 0 ? formatTransfereeTotalArea(plannedCents) : 'None yet';
+    if (balanceSizeEl) {
+      balanceSizeEl.textContent = formatTransfereeTotalArea(Math.max(0, balanceCents));
+      balanceSizeEl.style.color = balanceCents <= 0 ? 'var(--danger)' : 'var(--success, #10b981)';
+    }
+    landInfoBanner.style.display = 'block';
+  }
+
+  if (partitionModal && partitionOverlay) {
+    partitionModal.classList.add('active');
+    partitionOverlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closePartitionModal() {
+  if (partitionModal && partitionOverlay) {
+    partitionModal.classList.remove('active');
+    partitionOverlay.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+  activePartitionRecord = null;
+}
+
+if (partitionCloseBtn) partitionCloseBtn.addEventListener('click', closePartitionModal);
+if (partitionCancelBtn) partitionCancelBtn.addEventListener('click', closePartitionModal);
+if (partitionOverlay) partitionOverlay.addEventListener('click', closePartitionModal);
+
+if (partitionForm) {
+  partitionForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!activePartitionRecord || !state.supabaseClient || !state.currentUser) return;
+
+    const type = document.getElementById('partitionType').value;
+    const buyerName = document.getElementById('partitionBuyerName').value.trim();
+    const targetPattaLabel = partitionTargetPatta.value;
+    const sizeVal = parseFloat(document.getElementById('partitionSizeValue').value);
+    const sizeUnit = document.getElementById('partitionSizeUnit').value;
+    const notes = document.getElementById('partitionNotes').value.trim();
+
+    if (!buyerName) {
+      showToast('Please enter Transferee / Buyer Name.', 'error');
+      return;
+    }
+
+    if (isNaN(sizeVal) || sizeVal <= 0) {
+      showToast('Please enter a valid partition size.', 'error');
+      return;
+    }
+
+    const record = JSON.parse(JSON.stringify(activePartitionRecord));
+    if (!Array.isArray(record.partitions)) {
+      record.partitions = [];
+    }
+
+    // Validate partition size against remaining balance
+    const totalCents = convertUnits(record.landSize.value, record.landSize.unit).cents;
+    let plannedCents = 0;
+    record.partitions.forEach(p => {
+      plannedCents += convertUnits(p.size.value, p.size.unit).cents;
+    });
+    const entryCents = convertUnits(sizeVal, sizeUnit).cents;
+    const balanceCents = totalCents - plannedCents;
+
+    if (entryCents > balanceCents) {
+      const excess = formatTransfereeTotalArea(entryCents - balanceCents);
+      const available = formatTransfereeTotalArea(Math.max(0, balanceCents));
+      const proceed = confirm(
+        `⚠️ Excess Partition Size Warning!\n\n` +
+        `Entered size exceeds the available balance by ${excess}.\n` +
+        `Available Balance: ${available}\n\n` +
+        `Click OK to proceed with the entered value anyway, or Cancel to correct it.`
+      );
+      if (!proceed) return;
+    }
+
+    // Partition Plan entry
+    const partitionEntry = {
+      id: 'part_' + Date.now(),
+      type,
+      buyerName,
+      targetPattaLabel,
+      landType: record.landType || 'dry',
+      size: { value: sizeVal, unit: sizeUnit },
+      notes,
+      createdAt: new Date().toISOString()
+    };
+
+    record.partitions.push(partitionEntry);
+
+    try {
+      const { error } = await state.supabaseClient
+        .from('land_records')
+        .update({
+          partitions: record.partitions,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', record.id);
+
+      if (error) throw error;
+
+      showToast('Partition / Sale Deed Plan saved successfully!', 'success');
+      closePartitionModal();
+      await fetchRecords();
+      if (state.activeView === 'transferee') {
+        renderTransfereeView();
+      }
+    } catch (err) {
+      console.error('Error saving partition plan:', err);
+      showToast('Failed to save partition plan.', 'error');
+    }
+  });
+}
+
 recordForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -1088,6 +1629,76 @@ recordForm.addEventListener('submit', async (e) => {
     uploadedAttachments: tempAttachments
   };
 
+  // If Supabase Client and User are authenticated, write directly to Supabase DB & Storage
+  if (state.supabaseClient && state.currentUser) {
+    try {
+      const attachments = state.activeRecord ? { ...(state.activeRecord.attachments || {}) } : {};
+      
+      for (const type of ['document', 'ec', 'fmb']) {
+        const fileData = tempAttachments[type];
+        if (fileData === null) continue;
+        if (fileData && fileData.delete) {
+          attachments[type] = null;
+        } else if (fileData && fileData.base64) {
+          const uploaded = await uploadFileToSupabase(fileData, `${type}_${documentNumber}`);
+          if (uploaded) {
+            attachments[type] = uploaded;
+          }
+        }
+      }
+
+      for (let idx = 0; idx < pattasVal.length; idx++) {
+        const patta = pattasVal[idx];
+        if (patta.uploadedAttachment && patta.uploadedAttachment.base64) {
+          const uploaded = await uploadFileToSupabase(patta.uploadedAttachment, `patta_${patta.pattaNumber}`);
+          if (uploaded) {
+            patta.attachment = uploaded;
+          }
+        }
+        delete patta.uploadedAttachment;
+      }
+
+      const dbPayload = {
+        user_email: state.currentUser ? state.currentUser.email : 'p.manojkumar1101@gmail.com',
+        user_id: (state.currentUser && state.currentUser.id) ? state.currentUser.id : null,
+        document_number: documentNumber,
+        document_owner_name: docOwnersVal,
+        purchased_from: sellersVal,
+        purchase_date: purchaseDate || null,
+        district: districtVal,
+        sro: sroVal,
+        village: villageVal,
+        notes: notesTextarea.value.trim(),
+        pattas: pattasVal,
+        attachments: attachments,
+        partitions: state.activeRecord ? (state.activeRecord.partitions || []) : [],
+        updated_at: new Date().toISOString()
+      };
+
+      if (id) {
+        const { error } = await state.supabaseClient
+          .from('land_records')
+          .update(dbPayload)
+          .eq('id', id);
+        if (error) throw error;
+      } else {
+        const { error } = await state.supabaseClient
+          .from('land_records')
+          .insert([dbPayload]);
+        if (error) throw error;
+      }
+
+      showToast(id ? 'Record updated in Supabase Cloud!' : 'Record saved to Supabase Cloud!', 'success');
+      closeDrawer();
+      await fetchRecords();
+      return;
+    } catch (err) {
+      console.error('Supabase DB save error:', err);
+      showToast(err.message || 'Failed to save to Supabase. Trying local fallback...', 'error');
+    }
+  }
+
+  // Fallback to Express backend
   const url = id ? `/api/records/${id}` : '/api/records';
   const method = id ? 'PUT' : 'POST';
 
@@ -1140,6 +1751,30 @@ confirmOverlay.addEventListener('click', hideDeleteConfirm);
 confirmDeleteBtn.addEventListener('click', async () => {
   if (!activeDeleteId) return;
 
+  if (state.supabaseClient && state.currentUser) {
+    try {
+      const { error } = await state.supabaseClient
+        .from('land_records')
+        .update({
+          is_deleted: true,
+          deleted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', activeDeleteId);
+
+      if (error) throw error;
+
+      showToast('Record moved to trash (soft deleted).', 'success');
+      hideDeleteConfirm();
+      closeDrawer();
+      await fetchRecords();
+      return;
+    } catch (err) {
+      console.error('Error soft-deleting from Supabase:', err);
+      showToast('Failed to delete from Supabase.', 'error');
+    }
+  }
+
   try {
     const response = await fetch(`/api/records/${activeDeleteId}`, {
       method: 'DELETE'
@@ -1162,16 +1797,53 @@ confirmDeleteBtn.addEventListener('click', async () => {
 // API Data Sync & Dashboard Calculations
 // -------------------------------------------------------------
 async function fetchRecords() {
-  try {
-    const response = await fetch('/api/records');
-    if (!response.ok) throw new Error('Error loading records.');
-    state.records = await response.json();
+  if (!state.currentUser) {
+    state.records = [];
     populateOwnerFilter();
     updateDashboard();
     renderRecordsList();
-  } catch (error) {
-    console.error('Error getting records:', error);
-    showToast('Could not load records from server.', 'error');
+    return;
+  }
+
+  if (state.supabaseClient) {
+    try {
+      const { data, error } = await state.supabaseClient
+        .from('land_records')
+        .select('*')
+        .eq('user_email', state.currentUser.email)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      state.records = (data || []).map(r => {
+        const rec = {
+          id: r.id,
+          documentNumber: r.document_number,
+          documentOwnerName: typeof r.document_owner_name === 'string' ? JSON.parse(r.document_owner_name) : (r.document_owner_name || []),
+          purchasedFrom: typeof r.purchased_from === 'string' ? JSON.parse(r.purchased_from) : (r.purchased_from || []),
+          purchaseDate: r.purchase_date,
+          district: r.district || '',
+          sro: r.sro || '',
+          village: r.village || '',
+          notes: r.notes || '',
+          pattas: typeof r.pattas === 'string' ? JSON.parse(r.pattas) : (r.pattas || []),
+          attachments: typeof r.attachments === 'string' ? JSON.parse(r.attachments) : (r.attachments || {}),
+          partitions: typeof r.partitions === 'string' ? JSON.parse(r.partitions) : (r.partitions || []),
+          createdAt: r.created_at,
+          updatedAt: r.updated_at
+        };
+        return resolveDocumentFallbacks(rec);
+      });
+
+      populateOwnerFilter();
+      updateDashboard();
+      renderRecordsList();
+      return;
+    } catch (err) {
+      console.error('Error fetching records from Supabase:', err);
+      showToast('Error loading records from Supabase Database.', 'error');
+    }
   }
 }
 
@@ -1371,8 +2043,28 @@ function getFilteredAndSortedRecords() {
 }
 
 function renderRecordsList() {
+  if (!state.currentUser) {
+    recordsCountTitle.innerText = `Land Records (0)`;
+    updateDashboard([]);
+    recordsContainer.className = 'records-container empty-state';
+    recordsContainer.innerHTML = `
+      <div class="empty-state-message">
+        <div class="empty-illustration">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <h3>Authentication Required</h3>
+        <p>Please Sign In with your registered email and password to view and manage your land records in Supabase Database.</p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openAuthModal()" style="margin-top: 12px; height: 36px; padding: 0 16px;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; margin-right: 6px;"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Sign In Now
+        </button>
+      </div>
+    `;
+    return;
+  }
+
   const filtered = getFilteredAndSortedRecords();
-  recordsCountTitle.innerText = `Land Parcels (${filtered.length})`;
+  recordsCountTitle.innerText = `Land Records (${filtered.length})`;
   updateDashboard(filtered);
 
   if (filtered.length === 0) {
@@ -1462,10 +2154,11 @@ function renderRecordsList() {
           </div>`;
         }).join('') : '';
 
-        const pattaAttachmentLink = (p.attachment && p.attachment.fileUrl) ? `
-          <a href="${p.attachment.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" title="${p.attachment.fileName}" style="font-size: 0.65rem; padding: 2px 6px; margin-left: 6px; display: inline-flex; align-items: center; gap: 4px; height: 18px;">
+        const hasPattaFile = p.attachment && isValidFileUrl(p.attachment.fileUrl);
+        const pattaAttachmentLink = hasPattaFile ? `
+          <a href="${p.attachment.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" title="${p.attachment.fileName || 'View Patta Copy'}" style="font-size: 0.65rem; padding: 2px 6px; margin-left: 6px; display: inline-flex; align-items: center; gap: 4px; height: 18px;">
             <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            File
+            Patta Copy
           </a>
         ` : '';
 
@@ -1538,21 +2231,29 @@ function renderRecordsList() {
         </div>
         ${(function() {
           const atts = record.attachments || {};
-          const hasDocument = atts.document && atts.document.fileUrl;
-          const hasEc = atts.ec && atts.ec.fileUrl;
+          const hasDocument = atts.document && isValidFileUrl(atts.document.fileUrl);
+          const hasEc = atts.ec && isValidFileUrl(atts.ec.fileUrl);
+          const hasFmb = atts.fmb && isValidFileUrl(atts.fmb.fileUrl);
 
-          if (hasDocument || hasEc) {
+          if (hasDocument || hasEc || hasFmb) {
             const docLink = hasDocument ? `
-              <a href="${atts.document.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" title="${atts.document.fileName}">
+              <a href="${atts.document.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" title="${atts.document.fileName || 'View Deed'}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 Deed
               </a>
             ` : '';
 
             const ecLink = hasEc ? `
-              <a href="${atts.ec.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" title="${atts.ec.fileName}">
+              <a href="${atts.ec.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" title="${atts.ec.fileName || 'View EC'}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 EC Copy
+              </a>
+            ` : '';
+
+            const fmbLink = hasFmb ? `
+              <a href="${atts.fmb.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" title="${atts.fmb.fileName || 'View FMB'}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                FMB Copy
               </a>
             ` : '';
 
@@ -1562,6 +2263,51 @@ function renderRecordsList() {
                 <div class="card-attachments">
                   ${docLink}
                   ${ecLink}
+                  ${fmbLink}
+                </div>
+              </div>
+            `;
+          }
+          return '';
+        })()}
+        ${(function() {
+          if (Array.isArray(record.partitions) && record.partitions.length > 0) {
+            // Calculate total planned cents and balance
+            const totalCents = convertUnits(record.landSize.value, record.landSize.unit).cents;
+            let plannedCents = 0;
+            record.partitions.forEach(p => {
+              plannedCents += convertUnits(p.size.value, p.size.unit).cents;
+            });
+            const balanceCents = totalCents - plannedCents;
+            const balanceDisplay = formatTransfereeTotalArea(Math.max(0, balanceCents));
+            const balanceColor = balanceCents <= 0 ? 'var(--danger)' : 'var(--success, #10b981)';
+
+            const typeLabels = { wet: 'Wet (Nanjai)', dry: 'Dry (Punjai)', residential: 'Residential (Manai)', commercial: 'Commercial', well: 'Well (Kenaru)' };
+            const items = record.partitions.map(p => {
+              const ltLabel = typeLabels[p.landType || record.landType || 'dry'] || 'Dry';
+              return `
+              <div style="font-size: 0.75rem; color: var(--text-secondary); background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15); padding: 6px 10px; border-radius: var(--radius-xs); display: flex; flex-direction: column; gap: 2px;">
+                <div style="display: flex; justify-content: space-between; font-weight: 600;">
+                  <span style="color: var(--primary); text-transform: uppercase;">${p.type} DEED: <strong>${p.size.value} ${p.size.unit}</strong></span>
+                  <span style="display: flex; gap: 8px; align-items: center;">
+                    <span style="background: rgba(99,102,241,0.1); color: var(--primary); border-radius: 4px; padding: 1px 6px; font-size: 0.68rem;">${ltLabel}</span>
+                    <span style="color: var(--text-muted); font-size: 0.7rem;">${p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}</span>
+                  </span>
+                </div>
+                <div>Transferred to: <strong>${p.buyerName}</strong> ${p.deedNumber ? `(${p.deedNumber})` : ''}</div>
+                ${p.notes ? `<div style="font-style: italic; color: var(--text-muted); font-size: 0.7rem;">${p.notes}</div>` : ''}
+              </div>`;
+            }).join('');
+
+            return `
+              <div class="info-item" style="grid-column: span 2;">
+                <span class="lbl" style="color: var(--primary);">Partition & Sale Plans</span>
+                <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+                  ${items}
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: var(--radius-xs); border: 1px solid ${balanceCents <= 0 ? 'var(--danger)' : 'var(--border-color)'}; background: ${balanceCents <= 0 ? 'rgba(239,68,68,0.05)' : 'rgba(16,185,129,0.05)'}; margin-top: 2px;">
+                    <span style="font-size: 0.72rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted);">Balance Land Remaining</span>
+                    <span style="font-weight: 800; font-size: 0.82rem; color: ${balanceColor};">${balanceDisplay}</span>
+                  </div>
                 </div>
               </div>
             `;
@@ -1582,7 +2328,11 @@ function renderRecordsList() {
           <span>Purchased: <strong>${dateFormatted}</strong></span>
           ${sellersText}
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button type="button" class="btn btn-outline btn-sm partition-trigger" data-id="${record.id}" style="padding: 4px 8px; font-size: 0.7rem; border-radius: var(--radius-xs); height: 26px; font-family: var(--font-body); font-weight: 500;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-9"/><path d="m18 9-6 4-6-4"/></svg>
+            Partition / Sale
+          </button>
           <button type="button" class="btn btn-outline btn-sm ec-helper-trigger" data-id="${record.id}" style="padding: 4px 8px; font-size: 0.7rem; border-radius: var(--radius-xs); height: 26px; font-family: var(--font-body); font-weight: 500;">
             EC Helper
           </button>
@@ -1593,6 +2343,15 @@ function renderRecordsList() {
 
     // Click on card opens edit mode
     card.addEventListener('click', () => openDrawer(record));
+
+    // Partition Button Click Handler
+    const partitionBtn = card.querySelector('.partition-trigger');
+    if (partitionBtn) {
+      partitionBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openPartitionModal(record);
+      });
+    }
 
     // EC Helper Button Click Handler
     const ecBtn = card.querySelector('.ec-helper-trigger');
@@ -1841,7 +2600,7 @@ ecModal.querySelectorAll('.copy-btn').forEach(btn => {
 // App Initialization
 // -------------------------------------------------------------
 function initAttachmentsHandlers() {
-  ['Document', 'Ec'].forEach(name => {
+  ['Document', 'Ec', 'Fmb'].forEach(name => {
     const area = document.getElementById(`area${name}`);
     const fileInput = document.getElementById(`file${name}`);
     const type = name.toLowerCase();
@@ -1898,8 +2657,1004 @@ function initAttachmentsHandlers() {
   });
 }
 
+// -------------------------------------------------------------
+// Left Navigation Drawer & View Switching
+// -------------------------------------------------------------
+const leftMenuBtn = document.getElementById('leftMenuBtn');
+const leftNavCloseBtn = document.getElementById('leftNavCloseBtn');
+const leftNavOverlay = document.getElementById('leftNavOverlay');
+const leftNavDrawer = document.getElementById('leftNavDrawer');
+const navMyLandsBtn = document.getElementById('navMyLandsBtn');
+const navDashboardBtn = document.getElementById('navDashboardBtn');
+const navNearbyLandsBtn = document.getElementById('navNearbyLandsBtn');
+
+const myLandsView = document.getElementById('myLandsView');
+const nearbyLandsSection = document.getElementById('nearbyLandsSection');
+
+function openLeftNav() {
+  if (leftNavDrawer && leftNavOverlay) {
+    leftNavDrawer.classList.add('active');
+    leftNavOverlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeLeftNav() {
+  if (leftNavDrawer && leftNavOverlay) {
+    leftNavDrawer.classList.remove('active');
+    leftNavOverlay.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+}
+
+if (leftMenuBtn) leftMenuBtn.addEventListener('click', openLeftNav);
+if (leftNavCloseBtn) leftNavCloseBtn.addEventListener('click', closeLeftNav);
+if (leftNavOverlay) leftNavOverlay.addEventListener('click', closeLeftNav);
+
+const navPlannedPartitionsBtn = document.getElementById('navPlannedPartitionsBtn');
+const plannedPartitionsSection = document.getElementById('plannedPartitionsSection');
+const transfereeSearchInput = document.getElementById('transfereeSearchInput');
+const clearTransfereeSearchBtn = document.getElementById('clearTransfereeSearchBtn');
+const transfereeRecordsContainer = document.getElementById('transfereeRecordsContainer');
+const transfereeCountTitle = document.getElementById('transfereeCountTitle');
+
+if (navMyLandsBtn) {
+  navMyLandsBtn.addEventListener('click', () => {
+    state.activeView = 'myLands';
+    if (navMyLandsBtn) navMyLandsBtn.classList.add('active');
+    if (navPlannedPartitionsBtn) navPlannedPartitionsBtn.classList.remove('active');
+    if (navNearbyLandsBtn) navNearbyLandsBtn.classList.remove('active');
+    if (myLandsView) myLandsView.classList.remove('hidden');
+    if (plannedPartitionsSection) plannedPartitionsSection.classList.add('hidden');
+    if (nearbyLandsSection) nearbyLandsSection.classList.add('hidden');
+    closeLeftNav();
+    fetchRecords();
+  });
+}
+
+if (navPlannedPartitionsBtn) {
+  navPlannedPartitionsBtn.addEventListener('click', async () => {
+    state.activeView = 'transferee';
+    if (navPlannedPartitionsBtn) navPlannedPartitionsBtn.classList.add('active');
+    if (navMyLandsBtn) navMyLandsBtn.classList.remove('active');
+    if (navNearbyLandsBtn) navNearbyLandsBtn.classList.remove('active');
+    if (plannedPartitionsSection) plannedPartitionsSection.classList.remove('hidden');
+    if (myLandsView) myLandsView.classList.add('hidden');
+    if (nearbyLandsSection) nearbyLandsSection.classList.add('hidden');
+    closeLeftNav();
+    await fetchRecords();
+    renderTransfereeView();
+  });
+}
+
+if (navNearbyLandsBtn) {
+  navNearbyLandsBtn.addEventListener('click', () => {
+    state.activeView = 'nearbyLands';
+    if (navNearbyLandsBtn) navNearbyLandsBtn.classList.add('active');
+    if (navMyLandsBtn) navMyLandsBtn.classList.remove('active');
+    if (navPlannedPartitionsBtn) navPlannedPartitionsBtn.classList.remove('active');
+    if (nearbyLandsSection) nearbyLandsSection.classList.remove('hidden');
+    if (myLandsView) myLandsView.classList.add('hidden');
+    if (plannedPartitionsSection) plannedPartitionsSection.classList.add('hidden');
+    closeLeftNav();
+    fetchNearbyRecords();
+  });
+}
+
+if (transfereeSearchInput) {
+  transfereeSearchInput.addEventListener('input', (e) => {
+    state.transfereeSearchQuery = e.target.value;
+    if (clearTransfereeSearchBtn) {
+      if (state.transfereeSearchQuery) {
+        clearTransfereeSearchBtn.classList.remove('hidden');
+      } else {
+        clearTransfereeSearchBtn.classList.add('hidden');
+      }
+    }
+    renderTransfereeView();
+  });
+}
+
+if (clearTransfereeSearchBtn) {
+  clearTransfereeSearchBtn.addEventListener('click', () => {
+    state.transfereeSearchQuery = '';
+    if (transfereeSearchInput) transfereeSearchInput.value = '';
+    clearTransfereeSearchBtn.classList.add('hidden');
+    renderTransfereeView();
+  });
+}
+
+const transfereeViewModeSelect = document.getElementById('transfereeViewMode');
+if (transfereeViewModeSelect) {
+  transfereeViewModeSelect.addEventListener('change', (e) => {
+    state.transfereeViewMode = e.target.value;
+    renderTransfereeView();
+  });
+}
+
+function renderTransfereeView() {
+  if (!transfereeRecordsContainer) return;
+
+  if (!state.currentUser) {
+    transfereeCountTitle.innerText = `Planned Partitions & Transferees (0)`;
+    transfereeRecordsContainer.className = 'records-container empty-state';
+    transfereeRecordsContainer.innerHTML = `
+      <div class="empty-state-message">
+        <div class="empty-illustration">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <h3>Authentication Required</h3>
+        <p>Please Sign In to view and manage your proposed land partition and sale plans.</p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openAuthModal()" style="margin-top: 12px; height: 36px; padding: 0 16px;">
+          Sign In Now
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  // Collect all partition plans across state.records
+  let allPlans = [];
+  state.records.forEach(record => {
+    let parts = record.partitions;
+    if (typeof parts === 'string') {
+      try { parts = JSON.parse(parts); } catch(e) { parts = []; }
+    }
+    if (Array.isArray(parts) && parts.length > 0) {
+      parts.forEach(p => {
+        allPlans.push({
+          parentRecordId: record.id,
+          parentDocNumber: record.documentNumber,
+          parentSellers: Array.isArray(record.documentOwnerName) ? record.documentOwnerName.join(', ') : '',
+          parentLandSize: record.landSize || { value: 0, unit: 'cent' },
+          parentLandType: record.landType || 'dry',
+          parentPartitions: Array.isArray(record.partitions) ? record.partitions : [],
+          planId: p.id,
+          buyerName: p.buyerName,
+          type: p.type || 'sale',
+          landType: p.landType || record.landType || 'dry',
+          targetPattaLabel: p.targetPattaLabel || 'Patta Parcel',
+          size: p.size || { value: 0, unit: 'cent' },
+          notes: p.notes || '',
+          createdAt: p.createdAt
+        });
+      });
+    }
+  });
+
+  if (state.transfereeSearchQuery) {
+    const q = state.transfereeSearchQuery.toLowerCase();
+    allPlans = allPlans.filter(p =>
+      p.buyerName.toLowerCase().includes(q) ||
+      p.parentSellers.toLowerCase().includes(q) ||
+      p.parentDocNumber.toLowerCase().includes(q) ||
+      p.targetPattaLabel.toLowerCase().includes(q) ||
+      p.notes.toLowerCase().includes(q)
+    );
+  }
+
+  if (allPlans.length === 0) {
+    transfereeCountTitle.innerText = `Planned Partitions & Transferees (0)`;
+    transfereeRecordsContainer.className = 'records-container empty-state';
+    transfereeRecordsContainer.innerHTML = `
+      <div class="empty-state-message">
+        <div class="empty-illustration">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-9"/><path d="m18 9-6 4-6-4"/></svg>
+        </div>
+        <h3>No Partition / Sale Plans Found</h3>
+        <p>You can create a partition or sale deed plan on any land record using the <strong>"Partition / Sale"</strong> action button.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const viewMode = state.transfereeViewMode || 'grouped';
+  const typeBadges = {
+    sale: '<span class="status-badge status-pending" style="background: rgba(245, 158, 11, 0.15); color: #d97706;">PROPOSED SALE DEED</span>',
+    partition: '<span class="status-badge status-transferred" style="background: rgba(59, 130, 246, 0.15); color: #2563eb;">FAMILY PARTITION PLAN</span>',
+    gift: '<span class="status-badge status-transferred" style="background: rgba(16, 185, 129, 0.15); color: #059669;">GIFT SETTLEMENT PLAN</span>',
+    release: '<span class="status-badge status-transferred" style="background: rgba(139, 92, 246, 0.15); color: #7c3aed;">RELEASE DEED PLAN</span>'
+  };
+
+  // Build groupsMap for both grouped and summary views
+  const groupsMap = {};
+  allPlans.forEach(plan => {
+    const key = plan.buyerName.trim();
+    if (!groupsMap[key]) groupsMap[key] = [];
+    groupsMap[key].push(plan);
+  });
+
+  if (viewMode === 'summary') {
+    renderSummaryView(groupsMap, typeBadges);
+    return;
+  }
+
+  if (viewMode === 'grouped') {
+    const groupKeys = Object.keys(groupsMap).sort((a, b) => a.localeCompare(b));
+    transfereeCountTitle.innerText = `Planned Partitions & Transferees (${groupKeys.length} Transferee Portfolio${groupKeys.length === 1 ? '' : 's'})`;
+
+    transfereeRecordsContainer.className = 'records-container';
+    transfereeRecordsContainer.innerHTML = groupKeys.map(buyerName => {
+      const plansList = groupsMap[buyerName];
+      
+      // Calculate total cents across all plans for this transferee
+      let totalCents = 0;
+      plansList.forEach(p => {
+        const conv = convertUnits(p.size.value, p.size.unit);
+        totalCents += conv.cents;
+      });
+
+      const totalSizeDisplay = formatTransfereeTotalArea(totalCents);
+
+      const itemsHtml = plansList.map(plan => `
+        <div style="background: var(--bg-card); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            ${typeBadges[plan.type] || typeBadges.sale}
+            <span style="font-size: 1rem; font-weight: 700; color: var(--primary);">${plan.size.value} ${plan.size.unit}</span>
+          </div>
+
+          <div style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;">
+            <div><span style="color: var(--text-muted);">From Seller:</span> <strong>${escapeHtml(plan.parentSellers || 'Primary Owner')}</strong></div>
+            <div><span style="color: var(--text-muted);">Parent Doc:</span> <strong>Doc #${escapeHtml(plan.parentDocNumber)}</strong></div>
+            <div><span style="color: var(--text-muted);">Target Parcel:</span> <strong>${escapeHtml(plan.targetPattaLabel)}</strong></div>
+            ${plan.notes ? `<div style="font-style: italic; color: var(--text-secondary); margin-top: 2px;">"${escapeHtml(plan.notes)}"</div>` : ''}
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; margin-top: 4px; border-top: 1px solid var(--border-color); padding-top: 6px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="removePartitionPlan('${plan.parentRecordId}', '${plan.planId}')" style="color: var(--danger); padding: 2px 8px; font-size: 0.75rem;">
+              Remove Plan
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      return `
+        <div class="record-card" style="border-left: 5px solid var(--primary); display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <!-- Single View Header -->
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+              <div>
+                <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Transferee / Buyer</div>
+                <h3 style="font-size: 1.25rem; font-family: var(--font-heading); color: var(--text-primary); margin: 2px 0 0 0;">${escapeHtml(buyerName)}</h3>
+              </div>
+              <span class="status-badge" style="background: var(--bg-hover); color: var(--text-primary); border: 1px solid var(--border-color); font-weight: 600;">
+                ${plansList.length} Proposed Plan${plansList.length > 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <!-- List of All Parcels Acquired -->
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+              ${itemsHtml}
+            </div>
+          </div>
+
+          <!-- Total Accumulated Area Summary at the end -->
+          <div style="background: var(--primary-bg, rgba(59, 130, 246, 0.08)); border: 1px solid var(--primary); border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 8px;">
+            <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; letter-spacing: 0.5px;">Total Acquired Land Area (End Summary)</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: var(--primary); margin-top: 2px;">
+              ${totalSizeDisplay}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return;
+  }
+
+  // Individual Mode
+  transfereeCountTitle.innerText = `Planned Partitions & Transferees (${allPlans.length})`;
+  transfereeRecordsContainer.className = 'records-container';
+  transfereeRecordsContainer.innerHTML = allPlans.map(plan => {
+    const typeLabels = { wet: 'Wet (Nanjai)', dry: 'Dry (Punjai)', residential: 'Residential (Manai)', commercial: 'Commercial', well: 'Well (Kenaru)' };
+    const ltLabel = typeLabels[plan.landType || 'dry'] || 'Dry (Punjai)';
+
+    // Calculate balance for this record
+    const parentTotalCents = convertUnits(plan.parentLandSize.value, plan.parentLandSize.unit).cents;
+    let parentPlannedCents = 0;
+    if (Array.isArray(plan.parentPartitions)) {
+      plan.parentPartitions.forEach(p => {
+        parentPlannedCents += convertUnits(p.size.value, p.size.unit).cents;
+      });
+    }
+    const balanceCents = parentTotalCents - parentPlannedCents;
+    const balanceColor = balanceCents <= 0 ? 'var(--danger)' : 'var(--success, #10b981)';
+    const balanceDisplay = formatTransfereeTotalArea(Math.max(0, balanceCents));
+
+    return `
+      <div class="record-card" style="border-left: 4px solid var(--primary);">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Transferee / Buyer</div>
+            <h3 style="font-size: 1.2rem; font-family: var(--font-heading); color: var(--text-primary); margin: 2px 0 0 0;">${escapeHtml(plan.buyerName)}</h3>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+            ${typeBadges[plan.type] || typeBadges.sale}
+            <span style="background: rgba(99,102,241,0.1); color: var(--primary); border-radius: 4px; padding: 2px 8px; font-size: 0.68rem; font-weight: 600;">${ltLabel}</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.88rem; background: var(--bg-card); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 12px;">
+          <div>
+            <span style="color: var(--text-muted);">Acquiring From Seller:</span>
+            <strong>${escapeHtml(plan.parentSellers || 'Primary Owner')}</strong>
+          </div>
+          <div>
+            <span style="color: var(--text-muted);">Parent Document:</span>
+            <strong>Doc #${escapeHtml(plan.parentDocNumber)}</strong>
+          </div>
+          <div>
+            <span style="color: var(--text-muted);">Target Parcel:</span>
+            <strong>${escapeHtml(plan.targetPattaLabel)}</strong>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-color); padding-top: 6px; margin-top: 4px;">
+            <span style="color: var(--text-muted);">Proposed Area Size:</span>
+            <span style="font-size: 1.05rem; font-weight: 700; color: var(--primary);">${plan.size.value} ${plan.size.unit}</span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; background: ${balanceCents <= 0 ? 'rgba(239,68,68,0.06)' : 'rgba(16,185,129,0.06)'}; border: 1px solid ${balanceCents <= 0 ? 'var(--danger)' : 'var(--border-color)'}; border-radius: var(--radius-xs); padding: 5px 8px;">
+            <span style="font-size: 0.72rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted);">Balance Land Remaining in Parent Record</span>
+            <span style="font-weight: 800; font-size: 0.8rem; color: ${balanceColor};">${balanceDisplay}</span>
+          </div>
+        </div>
+
+        ${plan.notes ? `
+          <div style="font-size: 0.82rem; color: var(--text-secondary); font-style: italic; margin-bottom: 12px; background: rgba(0,0,0,0.1); padding: 8px 10px; border-radius: var(--radius-xs);">
+            "${escapeHtml(plan.notes)}"
+          </div>
+        ` : ''}
+
+        <div class="card-footer" style="display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="removePartitionPlan('${plan.parentRecordId}', '${plan.planId}')" style="color: var(--danger);">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; margin-right: 4px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Remove Plan
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  return;
+
+  // ─── Summary Names View (reached if viewMode === 'summary') ───
+}
+
+function renderSummaryView(groupsMap, typeBadges) {
+  const groupKeys = Object.keys(groupsMap).sort((a, b) => a.localeCompare(b));
+  const transfereeCountTitle = document.getElementById('transfereeCountTitle');
+  const transfereeRecordsContainer = document.getElementById('transfereeRecordsContainer');
+
+  if (transfereeCountTitle) {
+    transfereeCountTitle.innerText = `Planned Partitions & Transferees (${groupKeys.length} Transferee${groupKeys.length === 1 ? '' : 's'})`;
+  }
+
+  transfereeRecordsContainer.className = 'records-container';
+  transfereeRecordsContainer.style.display = 'block';
+
+  transfereeRecordsContainer.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      ${groupKeys.map((buyerName, idx) => {
+        const plansList = groupsMap[buyerName];
+        let totalCents = 0;
+        plansList.forEach(p => {
+          const conv = convertUnits(p.size.value, p.size.unit);
+          totalCents += conv.cents;
+        });
+
+        const rowsHtml = plansList.map((plan, ri) => `
+          <tr>
+            <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">${ri + 1}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">
+              ${typeBadges[plan.type] || typeBadges.sale}
+            </td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">${escapeHtml(plan.targetPattaLabel)}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">Doc #${escapeHtml(plan.parentDocNumber)}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">${escapeHtml(plan.parentSellers || 'Primary Owner')}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color); font-weight: 700; color: var(--primary);">${plan.size.value} ${plan.size.unit}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.8rem;">${plan.notes ? escapeHtml(plan.notes) : '—'}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="removePartitionPlan('${plan.parentRecordId}', '${plan.planId}')" style="color: var(--danger); padding: 2px 8px; font-size: 0.72rem;">Remove</button>
+            </td>
+          </tr>
+        `).join('');
+
+        const totalDisplay = formatTransfereeTotalArea(totalCents);
+
+        return `
+          <div class="record-card" style="padding: 0; overflow: hidden; border-left: 4px solid var(--primary);">
+            <!-- Name Row with View Button -->
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; gap: 12px; cursor: pointer;" onclick="toggleTransfereeTable('ttable-${idx}', 'ttoggle-${idx}')">
+              <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                <div style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--accent)); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1rem; color: #fff; flex-shrink: 0;">
+                  ${escapeHtml(buyerName.trim().charAt(0).toUpperCase())}
+                </div>
+                <div>
+                  <div style="font-weight: 700; font-size: 1rem; color: var(--text-primary);">${escapeHtml(buyerName)}</div>
+                  <div style="font-size: 0.75rem; color: var(--text-muted);">${plansList.length} plan${plansList.length > 1 ? 's' : ''} &nbsp;·&nbsp; <span style="color: var(--primary); font-weight: 600;">${totalDisplay}</span></div>
+                </div>
+              </div>
+              <button type="button" id="ttoggle-${idx}" class="btn btn-primary btn-sm" style="flex-shrink: 0; min-width: 90px;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;margin-right:4px;"><path d="M3 3h18v4H3z"/><path d="M3 10h18v4H3z"/><path d="M3 17h18v4H3z"/></svg>
+                View Table
+              </button>
+            </div>
+
+            <!-- Hidden Table Panel -->
+            <div id="ttable-${idx}" style="display: none; border-top: 1px solid var(--border-color); overflow-x: auto;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.83rem;">
+                <thead>
+                  <tr style="background: var(--bg-hover);">
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">#</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Type</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Target Parcel</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Parent Doc</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Seller</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Size</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Notes</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rowsHtml}
+                  <tr style="background: var(--bg-hover);">
+                    <td colspan="5" style="padding: 10px 12px; font-weight: 700; text-align: right; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase;">Total Acquired Area →</td>
+                    <td colspan="3" style="padding: 10px 12px; font-weight: 800; color: var(--primary); font-size: 0.95rem;">${totalDisplay}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function toggleTransfereeTable(tableId, btnId) {
+  const table = document.getElementById(tableId);
+  const btn = document.getElementById(btnId);
+  if (!table) return;
+  const isOpen = table.style.display !== 'none';
+  table.style.display = isOpen ? 'none' : 'block';
+  if (btn) {
+    btn.innerHTML = isOpen
+      ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;margin-right:4px;"><path d="M3 3h18v4H3z"/><path d="M3 10h18v4H3z"/><path d="M3 17h18v4H3z"/></svg>View Table`
+      : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;margin-right:4px;"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>Collapse`;
+  }
+}
+
+async function removePartitionPlan(parentRecordId, planId) {
+  if (!confirm('Are you sure you want to remove this partition plan?')) return;
+  const rec = state.records.find(r => r.id === parentRecordId);
+  if (!rec || !Array.isArray(rec.partitions)) return;
+
+  const updatedPartitions = rec.partitions.filter(p => p.id !== planId);
+
+  try {
+    const { error } = await state.supabaseClient
+      .from('land_records')
+      .update({
+        partitions: updatedPartitions,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', parentRecordId);
+
+    if (error) throw error;
+
+    showToast('Partition plan removed.', 'success');
+    await fetchRecords();
+    renderTransfereeView();
+  } catch (err) {
+    console.error('Error removing partition plan:', err);
+    showToast('Failed to remove partition plan.', 'error');
+  }
+}
+
+// -------------------------------------------------------------
+// Nearby Lands & Master FMB Module
+// -------------------------------------------------------------
+const nearbySearchInput = document.getElementById('nearbySearchInput');
+const clearNearbySearchBtn = document.getElementById('clearNearbySearchBtn');
+const nearbyRecordsContainer = document.getElementById('nearbyRecordsContainer');
+const nearbyCountTitle = document.getElementById('nearbyCountTitle');
+const addNearbyLandBtn = document.getElementById('addNearbyLandBtn');
+
+const nearbyOverlay = document.getElementById('nearbyOverlay');
+const nearbyLandDrawer = document.getElementById('nearbyLandDrawer');
+const nearbyCloseBtn = document.getElementById('nearbyCloseBtn');
+const nearbyCancelBtn = document.getElementById('nearbyCancelBtn');
+const deleteNearbyBtn = document.getElementById('deleteNearbyBtn');
+const nearbyLandForm = document.getElementById('nearbyLandForm');
+
+const nearbyOwnersContainer = document.getElementById('nearbyOwnersContainer');
+const addNearbyOwnerBtn = document.getElementById('addNearbyOwnerBtn');
+
+const areaNearbyFmb = document.getElementById('areaNearbyFmb');
+const fileNearbyFmb = document.getElementById('fileNearbyFmb');
+const statusNearbyFmb = document.getElementById('statusNearbyFmb');
+const nameNearbyFmb = document.getElementById('nameNearbyFmb');
+const viewNearbyFmb = document.getElementById('viewNearbyFmb');
+const deleteNearbyFmbBtn = document.getElementById('deleteNearbyFmbBtn');
+
+const areaMasterFmb = document.getElementById('areaMasterFmb');
+const fileMasterFmb = document.getElementById('fileMasterFmb');
+const statusMasterFmb = document.getElementById('statusMasterFmb');
+const nameMasterFmb = document.getElementById('nameMasterFmb');
+const viewMasterFmb = document.getElementById('viewMasterFmb');
+const deleteMasterFmbBtn = document.getElementById('deleteMasterFmbBtn');
+
+let tempNearbyFmb = null;
+let tempMasterFmb = null;
+
+function addNearbyOwnerInput(initialVal = '') {
+  if (!nearbyOwnersContainer) return;
+  const div = document.createElement('div');
+  div.className = 'purchased-from-row';
+  div.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+  div.innerHTML = `
+    <input type="text" class="nearby-owner-name-input" value="${initialVal}" placeholder="e.g. K. Marimuthu" style="flex: 1; padding: 10px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem;">
+    <button type="button" class="btn-remove-row" style="background: transparent; border: none; color: var(--danger); font-size: 1.2rem; cursor: pointer; padding: 0 4px;">&times;</button>
+  `;
+  div.querySelector('.btn-remove-row').addEventListener('click', () => {
+    if (nearbyOwnersContainer.children.length > 1) {
+      div.remove();
+    } else {
+      div.querySelector('input').value = '';
+    }
+  });
+  nearbyOwnersContainer.appendChild(div);
+}
+
+if (addNearbyOwnerBtn) {
+  addNearbyOwnerBtn.addEventListener('click', () => addNearbyOwnerInput(''));
+}
+
+function openNearbyDrawer(record = null) {
+  if (!nearbyLandDrawer || !nearbyOverlay) return;
+
+  document.getElementById('nearbyRecordId').value = record ? record.id : '';
+  document.getElementById('nearbyDrawerTitle').innerText = record ? 'Edit Nearby Land Record' : 'Add Nearby / Adjacent Land Record';
+  document.getElementById('nearbySurveyNumber').value = record ? record.surveyNumber : '';
+  document.getElementById('nearbySubDivision').value = record ? (record.subDivision || '') : '';
+  document.getElementById('nearbyPattaNumber').value = record ? (record.pattaNumber || '') : '';
+  document.getElementById('nearbyDirection').value = record ? (record.direction || 'North Boundary') : 'North Boundary';
+  document.getElementById('nearbyLandType').value = record ? (record.landType || 'dry') : 'dry';
+  document.getElementById('nearbySizeValue').value = record && record.landSize ? record.landSize.value : '';
+  document.getElementById('nearbySizeUnit').value = record && record.landSize ? record.landSize.unit : 'cent';
+  document.getElementById('nearbyNotes').value = record ? (record.notes || '') : '';
+
+  if (nearbyOwnersContainer) {
+    nearbyOwnersContainer.innerHTML = '';
+    const owners = record && Array.isArray(record.pattaNames) && record.pattaNames.length > 0 ? record.pattaNames : [''];
+    owners.forEach(name => addNearbyOwnerInput(name));
+  }
+
+  // Attachments Reset
+  tempNearbyFmb = record && record.attachments ? record.attachments.fmb : null;
+  tempMasterFmb = record && record.attachments ? record.attachments.masterFmb : null;
+
+  updateNearbyAttachmentUI('fmb', tempNearbyFmb);
+  updateNearbyAttachmentUI('masterFmb', tempMasterFmb);
+
+  if (deleteNearbyBtn) {
+    if (record) deleteNearbyBtn.classList.remove('hidden');
+    else deleteNearbyBtn.classList.add('hidden');
+  }
+
+  nearbyLandDrawer.classList.add('active');
+  nearbyOverlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeNearbyDrawer() {
+  if (!nearbyLandDrawer || !nearbyOverlay) return;
+  nearbyLandDrawer.classList.remove('active');
+  nearbyOverlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+if (addNearbyLandBtn) addNearbyLandBtn.addEventListener('click', () => openNearbyDrawer());
+if (nearbyCloseBtn) nearbyCloseBtn.addEventListener('click', closeNearbyDrawer);
+if (nearbyCancelBtn) nearbyCancelBtn.addEventListener('click', closeNearbyDrawer);
+if (nearbyOverlay) nearbyOverlay.addEventListener('click', closeNearbyDrawer);
+
+function updateNearbyAttachmentUI(type, attObj) {
+  const statusEl = type === 'fmb' ? statusNearbyFmb : statusMasterFmb;
+  const areaEl = type === 'fmb' ? areaNearbyFmb : areaMasterFmb;
+  const nameEl = type === 'fmb' ? nameNearbyFmb : nameMasterFmb;
+  const viewEl = type === 'fmb' ? viewNearbyFmb : viewMasterFmb;
+
+  if (attObj && isValidFileUrl(attObj.fileUrl)) {
+    if (statusEl) statusEl.classList.remove('hidden');
+    if (areaEl) areaEl.classList.add('hidden');
+    if (nameEl) nameEl.innerText = attObj.fileName || (type === 'fmb' ? 'Parcel FMB' : 'Master FMB');
+    if (viewEl) viewEl.href = attObj.fileUrl;
+  } else {
+    if (statusEl) statusEl.classList.add('hidden');
+    if (areaEl) areaEl.classList.remove('hidden');
+    if (nameEl) nameEl.innerText = '';
+    if (viewEl) viewEl.href = '#';
+  }
+}
+
+// Upload file handlers
+if (areaNearbyFmb && fileNearbyFmb) {
+  areaNearbyFmb.addEventListener('click', () => fileNearbyFmb.click());
+  fileNearbyFmb.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      tempNearbyFmb = { fileName: file.name, fileObj: file, fileUrl: URL.createObjectURL(file) };
+      updateNearbyAttachmentUI('fmb', tempNearbyFmb);
+    }
+  });
+}
+
+if (areaMasterFmb && fileMasterFmb) {
+  areaMasterFmb.addEventListener('click', () => fileMasterFmb.click());
+  fileMasterFmb.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      tempMasterFmb = { fileName: file.name, fileObj: file, fileUrl: URL.createObjectURL(file) };
+      updateNearbyAttachmentUI('masterFmb', tempMasterFmb);
+    }
+  });
+}
+
+if (deleteNearbyFmbBtn) {
+  deleteNearbyFmbBtn.addEventListener('click', () => {
+    tempNearbyFmb = null;
+    updateNearbyAttachmentUI('fmb', null);
+  });
+}
+
+if (deleteMasterFmbBtn) {
+  deleteMasterFmbBtn.addEventListener('click', () => {
+    tempMasterFmb = null;
+    updateNearbyAttachmentUI('masterFmb', null);
+  });
+}
+
+// Fetch Nearby Records from Supabase DB
+async function fetchNearbyRecords() {
+  if (!state.currentUser) {
+    state.nearbyRecords = [];
+    renderNearbyRecordsList(false);
+    return;
+  }
+
+  if (state.supabaseClient) {
+    try {
+      const { data, error } = await state.supabaseClient
+        .from('nearby_land_records')
+        .select('*')
+        .eq('user_email', state.currentUser.email)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        if (error.code === 'PGRST205' || (error.message && error.message.includes('nearby_land_records'))) {
+          console.warn('nearby_land_records table not found on Supabase Cloud DB yet.');
+          state.nearbyRecords = [];
+          renderNearbyRecordsList(true);
+          return;
+        }
+        throw error;
+      }
+
+      state.nearbyRecords = (data || []).map(r => ({
+        id: r.id,
+        surveyNumber: r.survey_number,
+        subDivision: r.sub_division || '',
+        pattaNumber: r.patta_number || '',
+        pattaNames: typeof r.patta_names === 'string' ? JSON.parse(r.patta_names) : (r.patta_names || []),
+        landType: r.land_type || 'dry',
+        landSize: typeof r.land_size === 'string' ? JSON.parse(r.land_size) : (r.land_size || { value: 0, unit: 'cent' }),
+        direction: r.direction || 'Surrounding Survey',
+        notes: r.notes || '',
+        attachments: typeof r.attachments === 'string' ? JSON.parse(r.attachments) : (r.attachments || {}),
+        createdAt: r.created_at,
+        updatedAt: r.updated_at
+      }));
+
+      renderNearbyRecordsList(false);
+    } catch (err) {
+      console.error('Error fetching nearby records from Supabase:', err);
+      showToast('Error loading nearby lands from Supabase DB.', 'error');
+    }
+  }
+}
+
+function renderNearbyRecordsList(isTableMissing = false) {
+  if (!nearbyRecordsContainer) return;
+
+  if (isTableMissing) {
+    nearbyCountTitle.innerText = `Nearby & Surrounding Land Records (0)`;
+    nearbyRecordsContainer.className = 'records-container empty-state';
+    nearbyRecordsContainer.innerHTML = `
+      <div class="empty-state-message">
+        <div class="empty-illustration">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        </div>
+        <h3>Supabase Database Table Setup Required</h3>
+        <p>To enable Nearby Lands & Master FMB Cloud Storage, please run the SQL script in <code>data/supabase_setup.sql</code> in your Supabase SQL Editor.</p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openNearbyDrawer()" style="margin-top: 12px;">Add Nearby Land Record</button>
+      </div>
+    `;
+    return;
+  }
+
+  if (!state.currentUser) {
+    nearbyCountTitle.innerText = `Nearby & Surrounding Land Records (0)`;
+    nearbyRecordsContainer.className = 'records-container empty-state';
+    nearbyRecordsContainer.innerHTML = `
+      <div class="empty-state-message">
+        <div class="empty-illustration">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <h3>Authentication Required</h3>
+        <p>Please Sign In to view and store your nearby land records and master FMB maps in Supabase Cloud DB.</p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openAuthModal()" style="margin-top: 12px; height: 36px; padding: 0 16px;">
+          Sign In Now
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  let filtered = state.nearbyRecords;
+  if (state.nearbySearchQuery) {
+    const q = state.nearbySearchQuery.toLowerCase();
+    filtered = filtered.filter(r => 
+      r.surveyNumber.toLowerCase().includes(q) ||
+      r.subDivision.toLowerCase().includes(q) ||
+      r.pattaNumber.toLowerCase().includes(q) ||
+      r.direction.toLowerCase().includes(q) ||
+      r.pattaNames.some(n => n.toLowerCase().includes(q))
+    );
+  }
+
+  nearbyCountTitle.innerText = `Nearby & Surrounding Land Records (${filtered.length})`;
+
+  if (filtered.length === 0) {
+    nearbyRecordsContainer.className = 'records-container empty-state';
+    nearbyRecordsContainer.innerHTML = `
+      <div class="empty-state-message">
+        <div class="empty-illustration">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+        </div>
+        <h3>No Nearby Land Records Found</h3>
+        <p>Store details of adjacent survey numbers, patta owners, and Master Survey FMB maps.</p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openNearbyDrawer()" style="margin-top: 12px;">Add Nearby Land Record</button>
+      </div>
+    `;
+    return;
+  }
+
+  nearbyRecordsContainer.className = 'records-container';
+  nearbyRecordsContainer.innerHTML = '';
+
+  filtered.forEach(r => {
+    const card = document.createElement('div');
+    card.className = 'land-card';
+
+    const ownerChips = r.pattaNames.map(n => `<span class="badge" style="background: rgba(99, 102, 241, 0.1); color: var(--primary); border: 1px solid rgba(99, 102, 241, 0.2); margin-right: 4px; font-weight: 500;">${n}</span>`).join('');
+    
+    const hasParcelFmb = r.attachments && r.attachments.fmb && isValidFileUrl(r.attachments.fmb.fileUrl);
+    const hasMasterFmb = r.attachments && r.attachments.masterFmb && isValidFileUrl(r.attachments.masterFmb.fileUrl);
+
+    const parcelFmbChip = hasParcelFmb ? `
+      <a href="${r.attachments.fmb.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" style="font-size: 0.7rem; padding: 3px 8px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Parcel FMB
+      </a>
+    ` : '';
+
+    const masterFmbChip = hasMasterFmb ? `
+      <a href="${r.attachments.masterFmb.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" style="font-size: 0.7rem; padding: 3px 8px; background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); color: var(--success);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Master Survey FMB (Whole ${r.surveyNumber})
+      </a>
+    ` : '';
+
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="survey-title">
+          <h3>Survey ${r.surveyNumber}${r.subDivision ? '/' + r.subDivision : ''}</h3>
+          <span class="sub-survey">Patta ${r.pattaNumber || 'N/A'}</span>
+        </div>
+        <span class="badge badge-success" style="text-transform: uppercase; font-size: 0.7rem;">${r.direction}</span>
+      </div>
+
+      <div class="card-body">
+        <div class="info-item">
+          <span class="lbl">Patta Owners / Neighbors</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
+            ${ownerChips || '<span style="color: var(--text-muted);">No names listed</span>'}
+          </div>
+        </div>
+
+        <div class="info-item">
+          <span class="lbl">Land Type & Size</span>
+          <span class="val">${(r.landType || 'dry').toUpperCase()} — <strong>${r.landSize ? r.landSize.value : 0} ${r.landSize ? r.landSize.unit : 'cent'}</strong></span>
+        </div>
+
+        ${(hasParcelFmb || hasMasterFmb) ? `
+        <div class="info-item" style="grid-column: span 2;">
+          <span class="lbl">FMB Maps & Attachments</span>
+          <div class="card-attachments" style="margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap;">
+            ${parcelFmbChip}
+            ${masterFmbChip}
+          </div>
+        </div>
+        ` : ''}
+
+        ${r.notes ? `
+        <div class="info-item" style="grid-column: span 2;">
+          <span class="lbl">Notes / Boundary Remarks</span>
+          <p style="margin: 2px 0 0 0; font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">${r.notes}</p>
+        </div>
+        ` : ''}
+      </div>
+    `;
+
+    card.addEventListener('click', () => openNearbyDrawer(r));
+    nearbyRecordsContainer.appendChild(card);
+  });
+}
+
+// Nearby Search input listener
+if (nearbySearchInput) {
+  nearbySearchInput.addEventListener('input', () => {
+    state.nearbySearchQuery = nearbySearchInput.value.trim();
+    if (clearNearbySearchBtn) {
+      if (state.nearbySearchQuery) clearNearbySearchBtn.classList.remove('hidden');
+      else clearNearbySearchBtn.classList.add('hidden');
+    }
+    renderNearbyRecordsList();
+  });
+}
+
+if (clearNearbySearchBtn) {
+  clearNearbySearchBtn.addEventListener('click', () => {
+    nearbySearchInput.value = '';
+    state.nearbySearchQuery = '';
+    clearNearbySearchBtn.classList.add('hidden');
+    renderNearbyRecordsList();
+  });
+}
+
+// Save Nearby Land Form Submit Handler
+if (nearbyLandForm) {
+  nearbyLandForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!state.supabaseClient || !state.currentUser) return;
+
+    const id = document.getElementById('nearbyRecordId').value;
+    const surveyNumber = document.getElementById('nearbySurveyNumber').value.trim();
+    const subDivision = document.getElementById('nearbySubDivision').value.trim();
+    const pattaNumber = document.getElementById('nearbyPattaNumber').value.trim();
+    const direction = document.getElementById('nearbyDirection').value;
+    const landType = document.getElementById('nearbyLandType').value;
+    const sizeVal = parseFloat(document.getElementById('nearbySizeValue').value) || 0;
+    const sizeUnit = document.getElementById('nearbySizeUnit').value;
+    const notes = document.getElementById('nearbyNotes').value.trim();
+
+    // Gather non-empty patta owner names
+    const pattaNames = [];
+    nearbyOwnersContainer.querySelectorAll('.nearby-owner-name-input').forEach(input => {
+      if (input.value.trim()) pattaNames.push(input.value.trim());
+    });
+
+    if (!surveyNumber) {
+      showToast('Survey Number is required.', 'error');
+      return;
+    }
+
+    try {
+      // Upload attachments if new file selected
+      let fmbAttachment = tempNearbyFmb;
+      let masterFmbAttachment = tempMasterFmb;
+
+      if (tempNearbyFmb && tempNearbyFmb.fileObj) {
+        const fileExt = tempNearbyFmb.fileObj.name.split('.').pop();
+        const filePath = `nearby_${Date.now()}_fmb.${fileExt}`;
+        const { error: uploadErr } = await state.supabaseClient.storage
+          .from('land_documents')
+          .upload(filePath, tempNearbyFmb.fileObj);
+
+        if (uploadErr) console.error('Upload error FMB:', uploadErr);
+
+        const { data: publicUrlData } = state.supabaseClient.storage
+          .from('land_documents')
+          .getPublicUrl(filePath);
+
+        fmbAttachment = { fileName: tempNearbyFmb.fileName, fileUrl: publicUrlData.publicUrl };
+      }
+
+      if (tempMasterFmb && tempMasterFmb.fileObj) {
+        const fileExt = tempMasterFmb.fileObj.name.split('.').pop();
+        const filePath = `master_${Date.now()}_fmb.${fileExt}`;
+        const { error: uploadErr } = await state.supabaseClient.storage
+          .from('land_documents')
+          .upload(filePath, tempMasterFmb.fileObj);
+
+        if (uploadErr) console.error('Upload error Master FMB:', uploadErr);
+
+        const { data: publicUrlData } = state.supabaseClient.storage
+          .from('land_documents')
+          .getPublicUrl(filePath);
+
+        masterFmbAttachment = { fileName: tempMasterFmb.fileName, fileUrl: publicUrlData.publicUrl };
+      }
+
+      const payload = {
+        user_email: state.currentUser.email,
+        survey_number: surveyNumber,
+        sub_division: subDivision,
+        patta_number: pattaNumber,
+        patta_names: pattaNames,
+        land_type: landType,
+        land_size: { value: sizeVal, unit: sizeUnit },
+        direction,
+        notes,
+        attachments: {
+          fmb: fmbAttachment,
+          masterFmb: masterFmbAttachment
+        },
+        updated_at: new Date().toISOString()
+      };
+
+      if (id) {
+        const { error } = await state.supabaseClient
+          .from('nearby_land_records')
+          .update(payload)
+          .eq('id', id);
+
+        if (error) throw error;
+        showToast('Nearby Land Record updated successfully!', 'success');
+      } else {
+        payload.created_at = new Date().toISOString();
+        const { error } = await state.supabaseClient
+          .from('nearby_land_records')
+          .insert([payload]);
+
+        if (error) throw error;
+        showToast('Nearby Land Record created successfully!', 'success');
+      }
+
+      closeNearbyDrawer();
+      await fetchNearbyRecords();
+    } catch (err) {
+      console.error('Error saving nearby land record:', err);
+      showToast(err.message || 'Failed to save nearby land record.', 'error');
+    }
+  });
+}
+
+if (deleteNearbyBtn) {
+  deleteNearbyBtn.addEventListener('click', async () => {
+    const id = document.getElementById('nearbyRecordId').value;
+    if (!id || !state.supabaseClient) return;
+
+    if (confirm('Are you sure you want to delete this nearby land record?')) {
+      try {
+        const { error } = await state.supabaseClient
+          .from('nearby_land_records')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+        showToast('Nearby Land Record deleted successfully.', 'success');
+        closeNearbyDrawer();
+        await fetchNearbyRecords();
+      } catch (err) {
+        console.error('Error deleting nearby record:', err);
+        showToast('Failed to delete nearby record.', 'error');
+      }
+    }
+  });
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   initTheme();
+  initSupabase();
   fetchRecords();
   initAttachmentsHandlers();
 });

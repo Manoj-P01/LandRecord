@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="dark-theme">
   
@@ -18,16 +20,34 @@
     <!-- Top Header -->
     <header class="app-header">
       <div class="logo-area">
+        <button id="leftMenuBtn" class="icon-btn" aria-label="Open Navigation Menu" title="Menu" style="margin-right: 6px;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+        </button>
         <div class="logo-icon">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.12 3.88a3 3 0 0 0-4.24 0L2.12 11.64a1 1 0 0 0-.29.58L1.05 19.3a1 1 0 0 0 1.15 1.15l7.08-.78a1 1 0 0 0 .58-.29l7.76-7.76a3 3 0 0 0 0-4.24l-3.52-3.52z"/><path d="m16 8 4 4"/><path d="m12.5 5.5 3 3"/><path d="m9 18 3 3"/><path d="M19 19a1 1 0 0 0 1-1v-4a1 1 0 0 0-2 0v3H9.42a1 1 0 0 0-.7.3L5.65 20.4a1 1 0 0 0 .7 1.7h11.65a1 1 0 0 0 1-.1z"/></svg>
         </div>
         <div class="logo-text">
           <h1>LandRegistry</h1>
-          <span class="sub-title">Local Record Vault</span>
+          <span class="sub-title" id="storageModeSubtitle">Local Record Vault</span>
         </div>
       </div>
       
       <div class="header-actions">
+        <!-- User Auth Badge & Buttons -->
+        <div id="userAuthSection" class="user-auth-section">
+          <div id="userBadge" class="user-badge hidden">
+            <span id="userAvatar" class="user-avatar">U</span>
+            <span id="userEmailText" class="user-email-text">user@example.com</span>
+            <button id="logoutBtn" class="btn-logout-small" title="Sign Out">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
+          </div>
+          <button id="openAuthModalBtn" class="btn btn-outline btn-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            <span>Sign In</span>
+          </button>
+        </div>
+
         <button id="themeToggle" class="icon-btn" aria-label="Toggle Theme">
           <!-- Sun Icon -->
           <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
@@ -41,141 +61,235 @@
       </div>
     </header>
 
+    <!-- Left Slide-Over Navigation Sidebar -->
+    <div id="leftNavOverlay" class="drawer-overlay"></div>
+    <div id="leftNavDrawer" class="left-nav-drawer">
+      <div class="drawer-header" style="padding: 20px 24px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="logo-icon" style="width: 32px; height: 32px;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.12 3.88a3 3 0 0 0-4.24 0L2.12 11.64a1 1 0 0 0-.29.58L1.05 19.3a1 1 0 0 0 1.15 1.15l7.08-.78a1 1 0 0 0 .58-.29l7.76-7.76a3 3 0 0 0 0-4.24l-3.52-3.52z"/><path d="m16 8 4 4"/></svg>
+          </div>
+          <div>
+            <h3 style="font-size: 1.1rem; margin: 0; font-family: var(--font-heading);">LandRegistry</h3>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Land Record Management</span>
+          </div>
+        </div>
+        <button id="leftNavCloseBtn" class="close-drawer-btn">&times;</button>
+      </div>
+
+      <div class="left-nav-body" style="padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+        <button type="button" id="navMyLandsBtn" class="left-nav-item active">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          <span>My Land Records</span>
+        </button>
+
+        <button type="button" id="navPlannedPartitionsBtn" class="left-nav-item">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-9"/><path d="m18 9-6 4-6-4"/></svg>
+          <span>Planned Partitions & Transferees</span>
+        </button>
+
+        <button type="button" id="navNearbyLandsBtn" class="left-nav-item">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span>Nearby Lands & Master FMBs</span>
+        </button>
+      </div>
+
+      <div style="margin-top: auto; padding: 20px; border-top: 1px solid var(--border-color); font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+        Supabase Cloud Vault Integration
+      </div>
+    </div>
+
     <!-- Main Content Grid -->
     <main class="app-main">
       
-      <!-- Dashboard Stats Panel -->
-      <section class="stats-container">
-        <div class="stat-card total-holdings">
-          <div class="stat-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">Total Parcels</span>
-            <span id="statTotalParcels" class="stat-value">0</span>
-          </div>
-        </div>
-
-        <div class="stat-card total-area">
-          <div class="stat-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">Total Land Size</span>
-            <span id="statTotalSize" class="stat-value">0.00 Cent</span>
-            <div class="stat-sub">
-              <span id="statTotalSizeSub1">0.00 Acre</span> | <span id="statTotalSizeSub2">0 Sq Ft</span>
+      <!-- Wrapper for My Land Records View -->
+      <div id="myLandsView">
+        <!-- Dashboard Stats Panel -->
+        <section class="stats-container">
+          <div class="stat-card total-holdings">
+            <div class="stat-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
             </div>
-          </div>
-        </div>
-
-        <div class="stat-card patta-status">
-          <div class="stat-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">Patta Transferred</span>
-            <span id="statPattaTransferred" class="stat-value">0 / 0</span>
-            <span id="statPattaPercentage" class="stat-meta">0% Transferred</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Filter, Search and Controls Bar -->
-      <section class="toolbar">
-        <div class="filter-controls">
-          <div class="control-group search-control-group">
-            <label for="searchInput">Search Records</label>
-            <div class="search-box">
-              <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <input type="text" id="searchInput" placeholder="Search by survey, patta, doc, name...">
-              <button id="clearSearchBtn" class="clear-btn hidden">&times;</button>
+            <div class="stat-info">
+              <span class="stat-label">Total Records</span>
+              <span id="statTotalParcels" class="stat-value">0</span>
             </div>
           </div>
 
-          <div class="control-group">
-            <label for="filterPatta">Patta Status</label>
-            <select id="filterPatta" class="select-input">
-              <option value="all">All Records</option>
-              <option value="transferred">Transferred</option>
-              <option value="pending">Pending Transfer</option>
-            </select>
+          <div class="stat-card total-area">
+            <div class="stat-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2"/><path d="M9 3v18"/><path d="M15 3v18"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Total Land Size</span>
+              <span id="statTotalSize" class="stat-value">0.00 Cent</span>
+              <div class="stat-sub">
+                <span id="statTotalSizeSub1">0.00 Acre</span> | <span id="statTotalSizeSub2">0 Sq Ft</span>
+              </div>
+            </div>
           </div>
 
-          <div class="control-group">
-            <label for="filterType">Land Type</label>
-            <select id="filterType" class="select-input">
-              <option value="all">All Types</option>
-              <option value="wet">Wet Land (Nanjai)</option>
-              <option value="dry">Dry Land (Punjai)</option>
-              <option value="residential">Residential (Manai)</option>
-              <option value="commercial">Commercial</option>
-              <option value="well">Well (Kenaru)</option>
-            </select>
+          <div class="stat-card patta-status">
+            <div class="stat-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            </div>
+            <div class="stat-info">
+              <span class="stat-label">Patta Transferred</span>
+              <span id="statPattaTransferred" class="stat-value">0 / 0</span>
+              <span id="statPattaPercentage" class="stat-meta">0% Transferred</span>
+            </div>
+          </div>
+        </section>
+        <!-- Filter, Search and Controls Bar -->
+        <section class="toolbar">
+          <div class="filter-controls">
+            <div class="control-group search-control-group">
+              <label for="searchInput">Search Records</label>
+              <div class="search-box">
+                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="searchInput" placeholder="Search by survey, patta, doc, name...">
+                <button id="clearSearchBtn" class="clear-btn hidden">&times;</button>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label for="filterPatta">Patta Status</label>
+              <select id="filterPatta" class="select-input">
+                <option value="all">All Records</option>
+                <option value="transferred">Transferred</option>
+                <option value="pending">Pending Transfer</option>
+              </select>
+            </div>
+
+            <div class="control-group">
+              <label for="filterType">Land Type</label>
+              <select id="filterType" class="select-input">
+                <option value="all">All Types</option>
+                <option value="wet">Wet Land (Nanjai)</option>
+                <option value="dry">Dry Land (Punjai)</option>
+                <option value="residential">Residential (Manai)</option>
+                <option value="commercial">Commercial</option>
+                <option value="well">Well (Kenaru)</option>
+              </select>
+            </div>
+
+            <div class="control-group">
+              <label for="filterName">Document Owner Name</label>
+              <select id="filterName" class="select-input">
+                <option value="all">All Document Owners</option>
+              </select>
+            </div>
+
+            <div class="control-group">
+              <label for="sortBy">Sort By</label>
+              <select id="sortBy" class="select-input">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="size-desc">Size (High -> Low)</option>
+                <option value="size-asc">Size (Low -> High)</option>
+                <option value="survey">Survey Number</option>
+              </select>
+            </div>
+
+            <div class="control-group">
+              <label for="viewUnit">Display Unit</label>
+              <select id="viewUnit" class="select-input">
+                <option value="cent">Cents (ct)</option>
+                <option value="sqft">Sq Feet (sq ft)</option>
+                <option value="acre">Acres (ac)</option>
+                <option value="are">Ares (a)</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- Land Records List / Directory Section -->
+        <section class="records-section">
+          <div class="section-header">
+            <h2 id="recordsCountTitle">Land Parcels (0)</h2>
+            <div class="utility-actions">
+              <button id="exportCsvBtn" class="btn btn-outline btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export CSV
+              </button>
+              <button id="backupBtn" class="btn btn-outline btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Backup JSON
+              </button>
+              <button id="importBtn" class="btn btn-outline btn-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15" style="transform: rotate(180deg); transform-origin: 12px 9px;"/></svg>
+                Import Backup
+              </button>
+              <input type="file" id="importFileSelector" accept=".json" style="display: none;">
+            </div>
           </div>
 
-          <div class="control-group">
-            <label for="filterName">Document Owner Name</label>
-            <select id="filterName" class="select-input">
-              <option value="all">All Document Owners</option>
-            </select>
+          <!-- Desktop Table View / Mobile Card View container -->
+          <div id="recordsContainer" class="records-container empty-state">
+            <!-- Dynamically populated -->
           </div>
+        </section>
+      </div>
 
-          <div class="control-group">
-            <label for="sortBy">Sort By</label>
-            <select id="sortBy" class="select-input">
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="size-desc">Size (Large to Small)</option>
-              <option value="size-asc">Size (Small to Large)</option>
-              <option value="survey">Survey Number</option>
-            </select>
-          </div>
-
-          <div class="control-group">
-            <label for="viewUnit">Display Unit</label>
-            <select id="viewUnit" class="select-input">
-              <option value="cent">Cents (ct)</option>
-              <option value="sqft">Square Feet (sq ft)</option>
-              <option value="acre">Acres (ac)</option>
-              <option value="are">Ares (a)</option>
-            </select>
-          </div>
-        </div>
-      </section>
-
-      <!-- Land Records List / Directory Section -->
-      <section class="records-section">
+      <!-- Nearby / Adjacent Lands Section -->
+      <section id="nearbyLandsSection" class="records-section hidden">
         <div class="section-header">
-          <h2 id="recordsCountTitle">Land Parcels (0)</h2>
+          <div>
+            <h2 id="nearbyCountTitle">Nearby & Surrounding Land Records</h2>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Store adjacent parcel details, patta owners, and Master Survey FMB Maps</span>
+          </div>
           <div class="utility-actions">
-            <button id="exportCsvBtn" class="btn btn-outline btn-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Export CSV
+            <button id="addNearbyLandBtn" class="btn btn-primary btn-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; margin-right: 4px;"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+              Add Nearby Land Record
             </button>
-            <button id="backupBtn" class="btn btn-outline btn-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Backup JSON
-            </button>
-            <button id="importBtn" class="btn btn-outline btn-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15" style="transform: rotate(180deg); transform-origin: 12px 9px;"/></svg>
-              Import Backup
-            </button>
-            <input type="file" id="importFileSelector" accept=".json" style="display: none;">
           </div>
         </div>
 
-        <!-- Desktop Table View / Mobile Card View container -->
-        <div id="recordsContainer" class="records-container empty-state">
-          <!-- Dynamically populated or shows loading/empty -->
-          <div class="empty-state-message">
-            <div class="empty-illustration">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            </div>
-            <h3>No Land Records Found</h3>
-            <p>Get started by adding your first land ownership record.</p>
-            <button id="emptyStateAddBtn" class="btn btn-primary">Add Your First Record</button>
+        <!-- Nearby Search Toolbar -->
+        <div class="toolbar" style="margin-bottom: 16px;">
+          <div class="search-box" style="width: 100%;">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="nearbySearchInput" placeholder="Search by Survey No, Patta No, Neighbor Name, Boundary...">
+            <button id="clearNearbySearchBtn" class="clear-btn hidden">&times;</button>
           </div>
+        </div>
+
+        <!-- Nearby Records Grid Container -->
+        <div id="nearbyRecordsContainer" class="records-container">
+          <!-- Rendered dynamically -->
+        </div>
+      </section>
+
+      <!-- Planned Partitions & Transferee View Section -->
+      <section id="plannedPartitionsSection" class="records-section hidden">
+        <div class="section-header">
+          <div>
+            <h2 id="transfereeCountTitle">Planned Partitions & Transferee Summary</h2>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">View all proposed land sales and partition plans from the buyer/transferee perspective</span>
+          </div>
+        </div>
+
+        <!-- Transferee Search Toolbar -->
+        <div class="toolbar" style="margin-bottom: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <div class="search-box" style="flex: 1; min-width: 260px;">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="transfereeSearchInput" placeholder="Search by Transferee Name, Seller Name, Doc No, Patta, Survey...">
+            <button id="clearTransfereeSearchBtn" class="clear-btn hidden">&times;</button>
+          </div>
+
+          <div class="control-group" style="margin-bottom: 0;">
+            <select id="transfereeViewMode" class="select-input" style="height: 42px; width: auto; font-weight: 500;">
+              <option value="grouped">Group by Transferee (Single View & Total Area)</option>
+              <option value="individual">View All Individual Plans</option>
+              <option value="summary">Summary Names List (Click to View Table)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Transferee Cards Grid Container -->
+        <div id="transfereeRecordsContainer" class="records-container">
+          <!-- Rendered dynamically -->
         </div>
       </section>
 
@@ -354,6 +468,28 @@
                 </div>
               </div>
             </div>
+
+            <!-- FMB Map Copy -->
+            <div class="attachment-upload-box" id="uploadBoxFmb">
+              <label class="attachment-label">FMB Map Copy</label>
+              <div class="upload-area" id="areaFmb">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>Upload FMB</span>
+                <input type="file" id="fileFmb" accept="application/pdf,image/*" class="hidden-file-input" style="display: none;">
+              </div>
+              <div class="attachment-status hidden" id="statusFmb">
+                <span class="attachment-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </span>
+                <span class="attachment-name" id="nameFmb"></span>
+                <div class="attachment-actions">
+                  <a href="#" target="_blank" class="btn-view-attachment" id="viewFmb" title="View FMB">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  </a>
+                  <button type="button" class="btn-remove-attachment" data-type="fmb" title="Delete Attachment">&times;</button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Notes section -->
@@ -462,9 +598,287 @@
       </div>
     </div>
 
+    <!-- Partition & Sale Deed Side-Bar Drawer -->
+    <div id="partitionOverlay" class="drawer-overlay"></div>
+    <div id="partitionModal" class="form-drawer">
+      <div class="drawer-header">
+        <div>
+          <h3 id="partitionModalTitle">Plan Land Partition / Sale Deed</h3>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Record a land sale or family partition deed with size deduction</span>
+        </div>
+        <button id="partitionCloseBtn" class="close-drawer-btn">&times;</button>
+      </div>
+
+      <form id="partitionForm" class="drawer-form">
+        <div class="form-grid">
+
+          <!-- Row 1: Transaction Type & Buyer/Transferee Name -->
+          <div class="form-row-half">
+            <div class="form-group">
+              <label for="partitionType">Transaction Type</label>
+              <select id="partitionType" class="filter-select" style="width: 100%; height: 42px;">
+                <option value="sale">Sale Deed (Land Sale Plan)</option>
+                <option value="partition">Partition Deed (Family Split Plan)</option>
+                <option value="gift">Gift Deed (Settlement Plan)</option>
+                <option value="release">Release Deed Plan</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="partitionBuyerName">Buyer / Transferee Name <span class="required">*</span></label>
+              <input type="text" id="partitionBuyerName" list="buyerNameSuggestions" placeholder="Select or type new name..." autocomplete="off" required>
+              <datalist id="buyerNameSuggestions">
+                <!-- Populated dynamically from previous plans -->
+              </datalist>
+              <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; display: block;">Previously used names will appear as suggestions. Type a new name to add a new transferee.</span>
+            </div>
+          </div>
+
+          <!-- Row 2: Target Patta & Parcel and Partition Area -->
+          <div class="form-row-half">
+            <div class="form-group">
+              <label for="partitionTargetPatta">Target Patta & Parcel <span class="required">*</span></label>
+              <select id="partitionTargetPatta" class="filter-select" style="width: 100%; height: 42px;" required>
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="partitionSizeValue">Partition Area / Size <span class="required">*</span></label>
+              <div style="display: flex; gap: 6px;">
+                <input type="number" id="partitionSizeValue" placeholder="Size" step="any" min="0.0001" required style="flex: 1;">
+                <select id="partitionSizeUnit" class="filter-select" style="width: 90px; height: 42px;">
+                  <option value="cent">Cent</option>
+                  <option value="sqft">Sq Ft</option>
+                  <option value="acre">Acre</option>
+                  <option value="are">Are</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Land Info Banner (populated dynamically) -->
+          <div id="partitionLandInfoBanner" style="display:none; background: var(--bg-hover); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 4px;">
+            <div style="display: flex; gap: 24px; flex-wrap: wrap; font-size: 0.82rem;">
+              <div><span style="color: var(--text-muted);">Land Type:</span> <strong id="partitionLandType">—</strong></div>
+              <div><span style="color: var(--text-muted);">Total Size:</span> <strong id="partitionTotalSize" style="color: var(--primary);">—</strong></div>
+              <div><span style="color: var(--text-muted);">Already Planned:</span> <strong id="partitionPlannedSize" style="color: var(--accent);">—</strong></div>
+              <div><span style="color: var(--text-muted);">Available Balance:</span> <strong id="partitionBalanceSize" style="color: var(--success, #10b981);">—</strong></div>
+            </div>
+          </div>
+
+          <!-- Row 3: Notes / Remarks -->
+          <div class="form-group">
+            <label for="partitionNotes">Notes / Remarks</label>
+            <textarea id="partitionNotes" rows="3" placeholder="e.g. 20 cents proposed to sell out of 50 cents. Balance 30 cents retained." style="width: 100%; padding: 12px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font-body); font-size: 0.95rem; resize: vertical;"></textarea>
+          </div>
+
+        </div>
+
+        <div class="drawer-actions">
+          <button type="button" id="partitionCancelBtn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="submitPartitionBtn" class="btn btn-primary">Save Partition Plan</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Add / Edit Nearby Land Side-Bar Drawer -->
+    <div id="nearbyOverlay" class="drawer-overlay"></div>
+    <div id="nearbyLandDrawer" class="form-drawer">
+      <div class="drawer-header">
+        <div>
+          <h3 id="nearbyDrawerTitle">Add Nearby / Adjacent Land Record</h3>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">Record neighboring survey parcel details and upload Master Survey FMB map</span>
+        </div>
+        <button id="nearbyCloseBtn" class="close-drawer-btn">&times;</button>
+      </div>
+
+      <form id="nearbyLandForm" class="drawer-form">
+        <input type="hidden" id="nearbyRecordId">
+
+        <div class="form-grid">
+
+          <!-- Row 1: Survey Number & Subdivision Number -->
+          <div class="form-row-half">
+            <div class="form-group">
+              <label for="nearbySurveyNumber">Survey Number <span class="required">*</span></label>
+              <input type="text" id="nearbySurveyNumber" placeholder="e.g. 103" required>
+            </div>
+            <div class="form-group">
+              <label for="nearbySubDivision">Subdivision Number</label>
+              <input type="text" id="nearbySubDivision" placeholder="e.g. 1B">
+            </div>
+          </div>
+
+          <!-- Row 2: Patta Number & Direction/Boundary -->
+          <div class="form-row-half">
+            <div class="form-group">
+              <label for="nearbyPattaNumber">Patta Number</label>
+              <input type="text" id="nearbyPattaNumber" placeholder="e.g. 920">
+            </div>
+            <div class="form-group">
+              <label for="nearbyDirection">Boundary / Location Direction</label>
+              <select id="nearbyDirection" class="filter-select" style="width: 100%; height: 42px;">
+                <option value="North Boundary">North Boundary (Northern Adjacent)</option>
+                <option value="East Boundary">East Boundary (Eastern Adjacent)</option>
+                <option value="South Boundary">South Boundary (Southern Adjacent)</option>
+                <option value="West Boundary">West Boundary (Western Adjacent)</option>
+                <option value="Surrounding Survey">Surrounding Survey Parcel</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Row 3: Land Type & Size -->
+          <div class="form-row-half">
+            <div class="form-group">
+              <label for="nearbyLandType">Land Type</label>
+              <select id="nearbyLandType" class="filter-select" style="width: 100%; height: 42px;">
+                <option value="dry">Dry Land (Punjai)</option>
+                <option value="wet">Wet Land (Nanjai)</option>
+                <option value="residential">Residential (Manai)</option>
+                <option value="commercial">Commercial</option>
+                <option value="well">Well (Kenaru)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="nearbySizeValue">Land Size</label>
+              <div style="display: flex; gap: 6px;">
+                <input type="number" id="nearbySizeValue" placeholder="Size" step="any" min="0" style="flex: 1;">
+                <select id="nearbySizeUnit" class="filter-select" style="width: 90px; height: 42px;">
+                  <option value="cent">Cent</option>
+                  <option value="sqft">Sq Ft</option>
+                  <option value="acre">Acre</option>
+                  <option value="are">Are</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 4: Patta Owners List (Dynamic Multiple Owners) -->
+          <div class="form-group patta-owners-box">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label style="margin-bottom: 0;">Patta Owners / Neighbor Names</label>
+              <button type="button" id="addNearbyOwnerBtn" class="btn btn-outline-dashed btn-sm" style="padding: 2px 8px; font-size: 0.75rem;">
+                + Add Owner Name
+              </button>
+            </div>
+            <div id="nearbyOwnersContainer" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Dynamic owner rows -->
+            </div>
+          </div>
+
+          <!-- Row 5: Attachments (Parcel FMB & Whole Survey Number Master FMB) -->
+          <div class="form-group">
+            <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 8px;">FMB Map Attachments</label>
+
+            <div class="attachments-form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <!-- Individual Parcel FMB Map -->
+              <div class="attachment-upload-box">
+                <label class="attachment-label">Individual Parcel FMB Map</label>
+                <div class="upload-area" id="areaNearbyFmb">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <span>Upload Parcel FMB</span>
+                  <input type="file" id="fileNearbyFmb" accept="application/pdf,image/*" style="display: none;">
+                </div>
+                <div class="attachment-status hidden" id="statusNearbyFmb">
+                  <span class="attachment-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  </span>
+                  <span class="attachment-name" id="nameNearbyFmb"></span>
+                  <div class="attachment-actions">
+                    <a href="#" target="_blank" class="btn-view-attachment" id="viewNearbyFmb" title="View Parcel FMB">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    </a>
+                    <button type="button" class="btn-remove-attachment" id="deleteNearbyFmbBtn" title="Delete Attachment">&times;</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Whole Survey Number Master FMB Map -->
+              <div class="attachment-upload-box">
+                <label class="attachment-label">Whole Survey Master FMB Map</label>
+                <div class="upload-area" id="areaMasterFmb">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <span>Upload Master FMB</span>
+                  <input type="file" id="fileMasterFmb" accept="application/pdf,image/*" style="display: none;">
+                </div>
+                <div class="attachment-status hidden" id="statusMasterFmb">
+                  <span class="attachment-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  </span>
+                  <span class="attachment-name" id="nameMasterFmb"></span>
+                  <div class="attachment-actions">
+                    <a href="#" target="_blank" class="btn-view-attachment" id="viewMasterFmb" title="View Master FMB">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    </a>
+                    <button type="button" class="btn-remove-attachment" id="deleteMasterFmbBtn" title="Delete Attachment">&times;</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 6: Notes / Remarks -->
+          <div class="form-group">
+            <label for="nearbyNotes">Notes / Remarks</label>
+            <textarea id="nearbyNotes" rows="3" placeholder="Enter notes on boundary lines, shared well rights, neighbor contact details..." style="width: 100%; padding: 12px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font-body); font-size: 0.95rem; resize: vertical;"></textarea>
+          </div>
+
+        </div>
+
+        <div class="drawer-actions">
+          <button type="button" id="deleteNearbyBtn" class="btn btn-danger hidden">Delete Record</button>
+          <button type="button" id="nearbyCancelBtn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="saveNearbyBtn" class="btn btn-primary">Save Nearby Land</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Supabase Auth Modal -->
+    <div id="authOverlay" class="confirm-overlay"></div>
+    <div id="authModal" class="confirm-modal auth-modal">
+      <div class="auth-modal-header">
+        <h3 id="authModalTitle">Sign In to LandRegistry</h3>
+        <button id="authCloseBtn" class="close-drawer-btn">&times;</button>
+      </div>
+
+      <div class="auth-tabs">
+        <button type="button" id="tabLoginBtn" class="auth-tab-btn active">Log In</button>
+        <button type="button" id="tabSignupBtn" class="auth-tab-btn">Sign Up</button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="loginForm" class="auth-form">
+        <div class="form-group">
+          <label for="loginEmail">Email Address</label>
+          <input type="email" id="loginEmail" value="p.manojkumar1101@gmail.com" placeholder="yourname@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" value="Manoj@1101" placeholder="••••••••" required>
+        </div>
+        <div class="auth-actions">
+          <button type="submit" id="submitLoginBtn" class="btn btn-primary btn-block">Log In</button>
+        </div>
+      </form>
+
+      <!-- Signup Form -->
+      <form id="signupForm" class="auth-form hidden">
+        <div class="form-group">
+          <label for="signupEmail">Email Address</label>
+          <input type="email" id="signupEmail" value="p.manojkumar1101@gmail.com" placeholder="yourname@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="signupPassword">Password</label>
+          <input type="password" id="signupPassword" value="Manoj@1101" placeholder="Minimum 6 characters" minlength="6" required>
+        </div>
+        <div class="auth-actions">
+          <button type="submit" id="submitSignupBtn" class="btn btn-primary btn-block">Create Account</button>
+        </div>
+      </form>
+    </div>
+
     <!-- App Footer / Data Path Info -->
     <footer class="app-footer" style="margin-top: 40px; padding: 16px 0; border-top: 1px solid var(--border-color); text-align: center; font-size: 0.8rem; color: var(--text-muted);">
-      <p>Active Database File: <code style="background: var(--secondary); padding: 4px 8px; border-radius: var(--radius-xs); color: var(--text-secondary); word-break: break-all;">d:\Manoj_Personal\Personal\LandRecord\data\land_records.json</code></p>
+      <p>Active Database: <code id="activeDbModeText" style="background: var(--secondary); padding: 4px 8px; border-radius: var(--radius-xs); color: var(--text-secondary); word-break: break-all;">Supabase Cloud Database</code></p>
     </footer>
 
     <!-- Toasts notifications wrapper -->
