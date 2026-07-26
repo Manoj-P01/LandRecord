@@ -5,6 +5,28 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+function loadEnvFile() {
+  const envPath = path.join(process.cwd(), '.env');
+  if (!fs.existsSync(envPath)) return;
+
+  const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+  lines.forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex === -1) return;
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    let value = trimmed.slice(separatorIndex + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  });
+}
+
+loadEnvFile();
+
 // Path to records storage (using process.cwd() for Vercel Serverless environment compatibility)
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'land_records.json');
@@ -23,6 +45,13 @@ if (!process.env.VERCEL) {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(process.cwd(), 'public')));
+
+app.get('/api/auth-config', (req, res) => {
+  res.json({
+    email: process.env.LANDREGISTRY_DEFAULT_EMAIL || '',
+    password: process.env.LANDREGISTRY_DEFAULT_PASSWORD || ''
+  });
+});
 
 // Cloud Persistence Configurations
 const KV_REST_API_URL = process.env.KV_REST_API_URL;

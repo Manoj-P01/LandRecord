@@ -849,11 +849,11 @@
       <form id="loginForm" class="auth-form">
         <div class="form-group">
           <label for="loginEmail">Email Address</label>
-          <input type="email" id="loginEmail" value="p.manojkumar1101@gmail.com" placeholder="yourname@example.com" required>
+          <input type="email" id="loginEmail" placeholder="yourname@example.com" required>
         </div>
         <div class="form-group">
           <label for="loginPassword">Password</label>
-          <input type="password" id="loginPassword" value="Manoj@1101" placeholder="••••••••" required>
+          <input type="password" id="loginPassword" placeholder="••••••••" required>
         </div>
         <div class="auth-actions">
           <button type="submit" id="submitLoginBtn" class="btn btn-primary btn-block">Log In</button>
@@ -864,11 +864,11 @@
       <form id="signupForm" class="auth-form hidden">
         <div class="form-group">
           <label for="signupEmail">Email Address</label>
-          <input type="email" id="signupEmail" value="p.manojkumar1101@gmail.com" placeholder="yourname@example.com" required>
+          <input type="email" id="signupEmail" placeholder="yourname@example.com" required>
         </div>
         <div class="form-group">
           <label for="signupPassword">Password</label>
-          <input type="password" id="signupPassword" value="Manoj@1101" placeholder="Minimum 6 characters" minlength="6" required>
+          <input type="password" id="signupPassword" placeholder="Minimum 6 characters" minlength="6" required>
         </div>
         <div class="auth-actions">
           <button type="submit" id="submitSignupBtn" class="btn btn-primary btn-block">Create Account</button>
@@ -886,6 +886,27 @@
 
   </div>
 
+  <script>
+    window.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const response = await fetch('/api/auth-config');
+        if (!response.ok) return;
+        const { email = '', password = '' } = await response.json();
+
+        const loginEmail = document.getElementById('loginEmail');
+        const loginPassword = document.getElementById('loginPassword');
+        const signupEmail = document.getElementById('signupEmail');
+        const signupPassword = document.getElementById('signupPassword');
+
+        if (loginEmail && !loginEmail.value && email) loginEmail.value = email;
+        if (loginPassword && !loginPassword.value && password) loginPassword.value = password;
+        if (signupEmail && !signupEmail.value && email) signupEmail.value = email;
+        if (signupPassword && !signupPassword.value && password) signupPassword.value = password;
+      } catch (error) {
+        console.warn('Could not load auth defaults:', error);
+      }
+    });
+  </script>
   <script src="js/app.js"></script>
 </body>
 </html>
