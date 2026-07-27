@@ -4697,6 +4697,24 @@ function checkSubDivisionStatus(surveyNum, subDivName) {
   return { status: 'pending' };
 }
 
+function extractSubDivisions(ms) {
+  if (!ms) return [];
+  const raw = Array.isArray(ms.subDivisions) ? ms.subDivisions : [];
+  const result = [];
+  raw.forEach(item => {
+    const val = typeof item === 'string' ? item : (item.name || item.subDivision || '');
+    if (val.includes(',')) {
+      const parts = val.split(',').map(s => s.trim()).filter(Boolean);
+      parts.forEach(p => {
+        if (!result.includes(p)) result.push(p);
+      });
+    } else if (val && !result.includes(val.trim())) {
+      result.push(val.trim());
+    }
+  });
+  return result;
+}
+
 function renderMasterSurveysView() {
   if (!masterSurveysContainer) return;
 
@@ -4704,10 +4722,9 @@ function renderMasterSurveysView() {
   let totalPendingSubDivs = 0;
 
   state.masterSurveys.forEach(ms => {
-    const subDivs = Array.isArray(ms.subDivisions) ? ms.subDivisions : [];
+    const subDivs = extractSubDivisions(ms);
     totalSubDivs += subDivs.length;
-    subDivs.forEach(sd => {
-      const subName = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+    subDivs.forEach(subName => {
       const stat = checkSubDivisionStatus(ms.surveyNumber, subName);
       if (stat.status === 'pending') totalPendingSubDivs++;
     });
@@ -4723,28 +4740,24 @@ function renderMasterSurveysView() {
   const filteredSurveys = state.masterSurveys.filter(ms => {
     const sNum = (ms.surveyNumber || '').toLowerCase();
     const village = (ms.village || '').toLowerCase();
-    const subDivs = Array.isArray(ms.subDivisions) ? ms.subDivisions : [];
+    const subDivs = extractSubDivisions(ms);
 
-    const matchesSearch = !q || sNum.includes(q) || village.includes(q) || subDivs.some(sd => {
-      const name = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+    const matchesSearch = !q || sNum.includes(q) || village.includes(q) || subDivs.some(name => {
       return name.toLowerCase().includes(q);
     });
 
     if (!matchesSearch) return false;
 
     if (filter === 'pending') {
-      return subDivs.some(sd => {
-        const name = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+      return subDivs.some(name => {
         return checkSubDivisionStatus(ms.surveyNumber, name).status === 'pending';
       });
     } else if (filter === 'my_lands') {
-      return subDivs.some(sd => {
-        const name = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+      return subDivs.some(name => {
         return checkSubDivisionStatus(ms.surveyNumber, name).status === 'my_lands';
       });
     } else if (filter === 'nearby_lands') {
-      return subDivs.some(sd => {
-        const name = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+      return subDivs.some(name => {
         return checkSubDivisionStatus(ms.surveyNumber, name).status === 'nearby_lands';
       });
     }
@@ -4776,7 +4789,7 @@ function renderMasterSurveysView() {
     card.className = 'land-card';
     card.style.borderLeft = '4px solid var(--primary)';
 
-    const subDivs = Array.isArray(ms.subDivisions) ? ms.subDivisions : [];
+    const subDivs = extractSubDivisions(ms);
 
     let pendingCountInSurvey = 0;
     const subDivsHtml = subDivs.map(sd => {
@@ -4947,12 +4960,30 @@ function addSubDivisionRowInput(val = '') {
   const row = document.createElement('div');
   row.className = 'name-row';
   row.innerHTML = `
-    <input type="text" class="sub-division-input" placeholder="e.g., 1A or 2B" value="${escapeHtml(val)}">
+    <input type="text" class="sub-division-input" placeholder="e.g. 1, 2, 3, 4C2A1, 5B (comma separated allowed)" value="${escapeHtml(val)}">
     <button type="button" class="remove-name-btn" aria-label="Remove Row">&times;</button>
   `;
   subDivisionsContainer.appendChild(row);
 
+  const inputEl = row.querySelector('.sub-division-input');
   const removeBtn = row.querySelector('.remove-name-btn');
+
+  const handleCommaSplit = () => {
+    const rawVal = inputEl.value;
+    if (rawVal.includes(',')) {
+      const parts = rawVal.split(',').map(s => s.trim()).filter(Boolean);
+      if (parts.length > 0) {
+        inputEl.value = parts[0];
+        for (let i = 1; i < parts.length; i++) {
+          addSubDivisionRowInput(parts[i]);
+        }
+      }
+    }
+  };
+
+  inputEl.addEventListener('blur', handleCommaSplit);
+  inputEl.addEventListener('paste', () => setTimeout(handleCommaSplit, 10));
+
   removeBtn.addEventListener('click', () => {
     row.remove();
   });
@@ -5013,7 +5044,18 @@ if (masterSurveyForm) {
     const notes = document.getElementById('masterNotes').value.trim();
 
     const subDivInputs = subDivisionsContainer ? subDivisionsContainer.querySelectorAll('.sub-division-input') : [];
-    const subDivisions = Array.from(subDivInputs).map(inp => inp.value.trim()).filter(Boolean);
+    const subDivisions = [];
+    Array.from(subDivInputs).forEach(inp => {
+      const val = inp.value.trim();
+      if (val) {
+        const parts = val.split(',').map(s => s.trim()).filter(Boolean);
+        parts.forEach(p => {
+          if (!subDivisions.includes(p)) {
+            subDivisions.push(p);
+          }
+        });
+      }
+    });
 
     if (!surveyNumber) {
       showToast('Whole Survey Number is required.', 'error');
