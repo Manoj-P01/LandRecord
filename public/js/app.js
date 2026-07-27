@@ -16,6 +16,9 @@ const state = {
   sortBy: 'newest', // 'newest' | 'oldest' | 'size-desc' | 'size-asc' | 'survey'
   displayUnit: 'cent', // 'cent' | 'sqft' | 'acre'
   selectedItemCentsMap: {},
+  masterSurveys: [],
+  masterSurveySearchQuery: '',
+  masterSurveyFilterStatus: 'all', // 'all' | 'pending' | 'my_lands' | 'nearby_lands'
   supabaseClient: null,
   currentUser: null,
   isSupabaseConfigured: false
@@ -2868,6 +2871,27 @@ const clearTransfereeSearchBtn = document.getElementById('clearTransfereeSearchB
 const transfereeRecordsContainer = document.getElementById('transfereeRecordsContainer');
 const transfereeCountTitle = document.getElementById('transfereeCountTitle');
 
+const navMasterSurveysBtn = document.getElementById('navMasterSurveysBtn');
+const masterSurveysSection = document.getElementById('masterSurveysSection');
+const masterSurveysContainer = document.getElementById('masterSurveysContainer');
+const masterSurveysCountTitle = document.getElementById('masterSurveysCountTitle');
+const statMasterSurveysCount = document.getElementById('statMasterSurveysCount');
+const statMasterSubDivsCount = document.getElementById('statMasterSubDivsCount');
+const statPendingHighlightCount = document.getElementById('statPendingHighlightCount');
+const addMasterSurveyBtn = document.getElementById('addMasterSurveyBtn');
+const masterSurveyModal = document.getElementById('masterSurveyModal');
+const masterSurveyOverlay = document.getElementById('masterSurveyOverlay');
+const closeMasterSurveyModalBtn = document.getElementById('closeMasterSurveyModalBtn');
+const cancelMasterSurveyBtn = document.getElementById('cancelMasterSurveyBtn');
+const deleteMasterSurveyBtn = document.getElementById('deleteMasterSurveyBtn');
+const saveMasterSurveyBtn = document.getElementById('saveMasterSurveyBtn');
+const masterSurveyForm = document.getElementById('masterSurveyForm');
+const subDivisionsContainer = document.getElementById('subDivisionsContainer');
+const addSubDivisionRowBtn = document.getElementById('addSubDivisionRowBtn');
+const masterSurveySearchInput = document.getElementById('masterSurveySearchInput');
+const clearMasterSurveySearchBtn = document.getElementById('clearMasterSurveySearchBtn');
+const masterSurveyFilterStatus = document.getElementById('masterSurveyFilterStatus');
+
 if (navMyLandsBtn) {
   navMyLandsBtn.addEventListener('click', () => {
     state.activeView = 'myLands';
@@ -2875,10 +2899,12 @@ if (navMyLandsBtn) {
     if (navPlannedPartitionsBtn) navPlannedPartitionsBtn.classList.remove('active');
     if (navNearbyLandsBtn) navNearbyLandsBtn.classList.remove('active');
     if (navPendingDealsBtn) navPendingDealsBtn.classList.remove('active');
+    if (navMasterSurveysBtn) navMasterSurveysBtn.classList.remove('active');
     if (myLandsView) myLandsView.classList.remove('hidden');
     if (plannedPartitionsSection) plannedPartitionsSection.classList.add('hidden');
     if (nearbyLandsSection) nearbyLandsSection.classList.add('hidden');
     if (pendingDealsSection) pendingDealsSection.classList.add('hidden');
+    if (masterSurveysSection) masterSurveysSection.classList.add('hidden');
     closeLeftNav();
     fetchRecords();
   });
@@ -2891,10 +2917,12 @@ if (navPlannedPartitionsBtn) {
     if (navMyLandsBtn) navMyLandsBtn.classList.remove('active');
     if (navNearbyLandsBtn) navNearbyLandsBtn.classList.remove('active');
     if (navPendingDealsBtn) navPendingDealsBtn.classList.remove('active');
+    if (navMasterSurveysBtn) navMasterSurveysBtn.classList.remove('active');
     if (plannedPartitionsSection) plannedPartitionsSection.classList.remove('hidden');
     if (myLandsView) myLandsView.classList.add('hidden');
     if (nearbyLandsSection) nearbyLandsSection.classList.add('hidden');
     if (pendingDealsSection) pendingDealsSection.classList.add('hidden');
+    if (masterSurveysSection) masterSurveysSection.classList.add('hidden');
     closeLeftNav();
     await fetchRecords();
     renderTransfereeView();
@@ -2908,10 +2936,12 @@ if (navNearbyLandsBtn) {
     if (navMyLandsBtn) navMyLandsBtn.classList.remove('active');
     if (navPlannedPartitionsBtn) navPlannedPartitionsBtn.classList.remove('active');
     if (navPendingDealsBtn) navPendingDealsBtn.classList.remove('active');
+    if (navMasterSurveysBtn) navMasterSurveysBtn.classList.remove('active');
     if (nearbyLandsSection) nearbyLandsSection.classList.remove('hidden');
     if (myLandsView) myLandsView.classList.add('hidden');
     if (plannedPartitionsSection) plannedPartitionsSection.classList.add('hidden');
     if (pendingDealsSection) pendingDealsSection.classList.add('hidden');
+    if (masterSurveysSection) masterSurveysSection.classList.add('hidden');
     closeLeftNav();
     fetchNearbyRecords();
   });
@@ -2924,12 +2954,34 @@ if (navPendingDealsBtn) {
     if (navMyLandsBtn) navMyLandsBtn.classList.remove('active');
     if (navPlannedPartitionsBtn) navPlannedPartitionsBtn.classList.remove('active');
     if (navNearbyLandsBtn) navNearbyLandsBtn.classList.remove('active');
+    if (navMasterSurveysBtn) navMasterSurveysBtn.classList.remove('active');
     if (pendingDealsSection) pendingDealsSection.classList.remove('hidden');
     if (myLandsView) myLandsView.classList.add('hidden');
     if (plannedPartitionsSection) plannedPartitionsSection.classList.add('hidden');
     if (nearbyLandsSection) nearbyLandsSection.classList.add('hidden');
+    if (masterSurveysSection) masterSurveysSection.classList.add('hidden');
     closeLeftNav();
     await fetchPendingDeals();
+  });
+}
+
+if (navMasterSurveysBtn) {
+  navMasterSurveysBtn.addEventListener('click', async () => {
+    state.activeView = 'masterSurveys';
+    if (navMasterSurveysBtn) navMasterSurveysBtn.classList.add('active');
+    if (navMyLandsBtn) navMyLandsBtn.classList.remove('active');
+    if (navPlannedPartitionsBtn) navPlannedPartitionsBtn.classList.remove('active');
+    if (navNearbyLandsBtn) navNearbyLandsBtn.classList.remove('active');
+    if (navPendingDealsBtn) navPendingDealsBtn.classList.remove('active');
+    if (masterSurveysSection) masterSurveysSection.classList.remove('hidden');
+    if (myLandsView) myLandsView.classList.add('hidden');
+    if (plannedPartitionsSection) plannedPartitionsSection.classList.add('hidden');
+    if (nearbyLandsSection) nearbyLandsSection.classList.add('hidden');
+    if (pendingDealsSection) pendingDealsSection.classList.add('hidden');
+    closeLeftNav();
+    await fetchRecords();
+    await fetchNearbyRecords();
+    await fetchMasterSurveys();
   });
 }
 
@@ -4534,3 +4586,536 @@ if (deletePendingDealBtn) {
     }
   });
 }
+
+// -------------------------------------------------------------
+// Whole Survey Numbers & Sub-divisions Registry Manager
+// -------------------------------------------------------------
+async function fetchMasterSurveys() {
+  if (!state.currentUser) {
+    state.masterSurveys = [];
+    renderMasterSurveysView();
+    return;
+  }
+
+  if (state.supabaseClient) {
+    try {
+      const { data, error } = await state.supabaseClient
+        .from('master_survey_records')
+        .select('*')
+        .eq('user_email', state.currentUser.email)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      state.masterSurveys = (data || []).map(s => ({
+        id: s.id,
+        surveyNumber: s.survey_number,
+        subDivisions: typeof s.sub_divisions === 'string' ? JSON.parse(s.sub_divisions) : (s.sub_divisions || []),
+        village: s.village || '',
+        notes: s.notes || '',
+        createdAt: s.created_at,
+        updatedAt: s.updated_at
+      }));
+
+      renderMasterSurveysView();
+      return;
+    } catch (err) {
+      console.error('Error fetching master surveys from Supabase:', err);
+    }
+  }
+
+  // Local REST API Fallback
+  try {
+    const res = await fetch('/api/master-surveys');
+    if (res.ok) {
+      state.masterSurveys = await res.json();
+    }
+  } catch (e) {
+    console.error('Error fetching master surveys local:', e);
+  }
+  renderMasterSurveysView();
+}
+
+function checkSubDivisionStatus(surveyNum, subDivName) {
+  const normSurvey = (surveyNum || '').trim().toLowerCase();
+  const normSub = (subDivName || '').trim().toLowerCase();
+
+  // 1. Check in My Land Records
+  let foundInMyLands = false;
+  let matchedMyRecord = null;
+
+  for (const r of state.records) {
+    if (Array.isArray(r.pattas)) {
+      for (const p of r.pattas) {
+        if (Array.isArray(p.parcels)) {
+          for (const parcel of p.parcels) {
+            const pSurvey = (parcel.surveyNumber || '').trim().toLowerCase();
+            const pSub = (parcel.subDivision || '').trim().toLowerCase();
+            if (pSurvey === normSurvey && (pSub === normSub || (pSurvey + '/' + pSub) === normSurvey + '/' + normSub)) {
+              foundInMyLands = true;
+              matchedMyRecord = r;
+              break;
+            }
+          }
+        }
+        if (foundInMyLands) break;
+      }
+    } else {
+      const rSurvey = (r.surveyNumber || '').trim().toLowerCase();
+      const rSub = (r.subDivision || '').trim().toLowerCase();
+      if (rSurvey === normSurvey && (rSub === normSub || (rSurvey + '/' + rSub) === normSurvey + '/' + normSub)) {
+        foundInMyLands = true;
+        matchedMyRecord = r;
+      }
+    }
+    if (foundInMyLands) break;
+  }
+
+  if (foundInMyLands) {
+    return { status: 'my_lands', record: matchedMyRecord };
+  }
+
+  // 2. Check in Nearby Land Records
+  let foundInNearby = false;
+  let matchedNearbyRecord = null;
+
+  for (const nr of state.nearbyRecords) {
+    const nSurvey = (nr.surveyNumber || '').trim().toLowerCase();
+    const nSub = (nr.subDivision || '').trim().toLowerCase();
+    if (nSurvey === normSurvey && (nSub === normSub || (nSurvey + '/' + nSub) === normSurvey + '/' + normSub)) {
+      foundInNearby = true;
+      matchedNearbyRecord = nr;
+      break;
+    }
+  }
+
+  if (foundInNearby) {
+    return { status: 'nearby_lands', record: matchedNearbyRecord };
+  }
+
+  // 3. Not found -> Pending Highlight!
+  return { status: 'pending' };
+}
+
+function renderMasterSurveysView() {
+  if (!masterSurveysContainer) return;
+
+  let totalSubDivs = 0;
+  let totalPendingSubDivs = 0;
+
+  state.masterSurveys.forEach(ms => {
+    const subDivs = Array.isArray(ms.subDivisions) ? ms.subDivisions : [];
+    totalSubDivs += subDivs.length;
+    subDivs.forEach(sd => {
+      const subName = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+      const stat = checkSubDivisionStatus(ms.surveyNumber, subName);
+      if (stat.status === 'pending') totalPendingSubDivs++;
+    });
+  });
+
+  if (statMasterSurveysCount) statMasterSurveysCount.innerText = state.masterSurveys.length;
+  if (statMasterSubDivsCount) statMasterSubDivsCount.innerText = totalSubDivs;
+  if (statPendingHighlightCount) statPendingHighlightCount.innerText = totalPendingSubDivs;
+
+  const q = (state.masterSurveySearchQuery || '').toLowerCase();
+  const filter = state.masterSurveyFilterStatus || 'all';
+
+  const filteredSurveys = state.masterSurveys.filter(ms => {
+    const sNum = (ms.surveyNumber || '').toLowerCase();
+    const village = (ms.village || '').toLowerCase();
+    const subDivs = Array.isArray(ms.subDivisions) ? ms.subDivisions : [];
+
+    const matchesSearch = !q || sNum.includes(q) || village.includes(q) || subDivs.some(sd => {
+      const name = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+      return name.toLowerCase().includes(q);
+    });
+
+    if (!matchesSearch) return false;
+
+    if (filter === 'pending') {
+      return subDivs.some(sd => {
+        const name = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+        return checkSubDivisionStatus(ms.surveyNumber, name).status === 'pending';
+      });
+    } else if (filter === 'my_lands') {
+      return subDivs.some(sd => {
+        const name = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+        return checkSubDivisionStatus(ms.surveyNumber, name).status === 'my_lands';
+      });
+    } else if (filter === 'nearby_lands') {
+      return subDivs.some(sd => {
+        const name = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+        return checkSubDivisionStatus(ms.surveyNumber, name).status === 'nearby_lands';
+      });
+    }
+
+    return true;
+  });
+
+  if (masterSurveysCountTitle) masterSurveysCountTitle.innerText = `Whole Survey Numbers (${filteredSurveys.length})`;
+
+  if (filteredSurveys.length === 0) {
+    masterSurveysContainer.className = 'records-container empty-state';
+    masterSurveysContainer.innerHTML = `
+      <div class="empty-state-message">
+        <div class="empty-illustration">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        </div>
+        <h3>No Master Whole Surveys Registered</h3>
+        <p>Click 'Add Whole Survey & Sub-divisions' to record master survey numbers and track missing sub-divisions.</p>
+      </div>
+    `;
+    return;
+  }
+
+  masterSurveysContainer.className = 'records-container';
+  masterSurveysContainer.innerHTML = '';
+
+  filteredSurveys.forEach(ms => {
+    const card = document.createElement('div');
+    card.className = 'land-card';
+    card.style.borderLeft = '4px solid var(--primary)';
+
+    const subDivs = Array.isArray(ms.subDivisions) ? ms.subDivisions : [];
+
+    let pendingCountInSurvey = 0;
+    const subDivsHtml = subDivs.map(sd => {
+      const subName = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+      const matchRes = checkSubDivisionStatus(ms.surveyNumber, subName);
+
+      if (matchRes.status === 'pending') {
+        pendingCountInSurvey++;
+        return `
+          <div class="sub-div-pill pending-highlight" style="background: rgba(245, 158, 11, 0.08); border: 1.5px solid rgba(245, 158, 11, 0.45); box-shadow: 0 0 8px rgba(245, 158, 11, 0.1); padding: 8px 12px; border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-weight: 700; font-size: 0.9rem; color: #d97706; font-family: var(--font-heading);">Sub-div <strong>${escapeHtml(subName)}</strong></span>
+              <span class="type-tag" style="background: rgba(245, 158, 11, 0.2); color: #d97706; font-size: 0.68rem; font-weight: 700; padding: 2px 6px;">⚠️ Pending Entry</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <button type="button" class="btn btn-outline btn-sm quick-add-mylands-btn" data-survey="${escapeHtml(ms.surveyNumber)}" data-subdiv="${escapeHtml(subName)}" style="font-size: 0.7rem; padding: 3px 8px; border-color: rgba(245, 158, 11, 0.5); color: #d97706; height: 24px; font-weight: 600;">
+                + Add to My Lands
+              </button>
+              <button type="button" class="btn btn-outline btn-sm quick-add-nearby-btn" data-survey="${escapeHtml(ms.surveyNumber)}" data-subdiv="${escapeHtml(subName)}" style="font-size: 0.7rem; padding: 3px 8px; height: 24px;">
+                + Add to Nearby
+              </button>
+            </div>
+          </div>
+        `;
+      } else if (matchRes.status === 'my_lands') {
+        const docNo = matchRes.record ? matchRes.record.documentNumber : '';
+        return `
+          <div class="sub-div-pill recorded-my-lands" style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.25); padding: 8px 12px; border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary);">Sub-div <strong>${escapeHtml(subName)}</strong></span>
+            <span class="type-tag wet" style="font-size: 0.7rem; padding: 2px 8px;">✓ Recorded in My Lands ${docNo ? `(Doc ${docNo})` : ''}</span>
+          </div>
+        `;
+      } else {
+        return `
+          <div class="sub-div-pill recorded-nearby-lands" style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.25); padding: 8px 12px; border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary);">Sub-div <strong>${escapeHtml(subName)}</strong></span>
+            <span class="type-tag commercial" style="font-size: 0.7rem; padding: 2px 8px;">✓ Recorded in Nearby Lands</span>
+          </div>
+        `;
+      }
+    }).join('');
+
+    card.innerHTML = `
+      <div class="card-top">
+        <div class="survey-tag">
+          <span class="number" style="color: var(--primary);">Survey No: ${escapeHtml(ms.surveyNumber)}</span>
+          <span class="label">${ms.village ? 'Village: ' + escapeHtml(ms.village) : 'Whole Survey Record'}</span>
+        </div>
+        <div class="card-tags">
+          ${pendingCountInSurvey > 0 ? `
+            <span class="type-tag" style="background: rgba(245, 158, 11, 0.2); color: #d97706; font-weight: 700; font-size: 0.72rem; padding: 3px 8px;">
+              ⚠️ ${pendingCountInSurvey} Sub-division(s) Unentered
+            </span>
+          ` : `
+            <span class="type-tag wet" style="font-size: 0.72rem; padding: 3px 8px;">
+              ✓ All Sub-divisions Recorded
+            </span>
+          `}
+          <button type="button" class="btn btn-outline btn-sm edit-master-survey-trigger" data-id="${ms.id}" style="padding: 2px 8px; font-size: 0.72rem; height: 24px;">
+            Edit Master
+          </button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 12px;">
+        <label style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">
+          Sub-divisions (${subDivs.length} total)
+        </label>
+        <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;">
+          ${subDivsHtml || '<span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">No sub-divisions registered.</span>'}
+        </div>
+      </div>
+
+      ${ms.notes ? `
+        <div style="font-size: 0.8rem; color: var(--text-muted); border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 8px; margin-top: 6px;">
+          <strong>Notes:</strong> ${escapeHtml(ms.notes)}
+        </div>
+      ` : ''}
+    `;
+
+    const editBtn = card.querySelector('.edit-master-survey-trigger');
+    if (editBtn) {
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openMasterSurveyModal(ms);
+      });
+    }
+
+    card.querySelectorAll('.quick-add-mylands-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const survey = btn.dataset.survey;
+        const subdiv = btn.dataset.subdiv;
+        openDrawer(null);
+        setTimeout(() => {
+          if (pattasContainer) {
+            const pattaBlock = pattasContainer.querySelector('.patta-block');
+            if (pattaBlock) {
+              const surveyInp = pattaBlock.querySelector('.parcel-survey-input');
+              const subInp = pattaBlock.querySelector('.parcel-subdiv-input');
+              if (surveyInp) surveyInp.value = survey;
+              if (subInp) subInp.value = subdiv;
+            }
+          }
+        }, 120);
+      });
+    });
+
+    card.querySelectorAll('.quick-add-nearby-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const survey = btn.dataset.survey;
+        const subdiv = btn.dataset.subdiv;
+        openNearbyDrawer(null);
+        setTimeout(() => {
+          const sInp = document.getElementById('nearbySurveyNumber');
+          const subInp = document.getElementById('nearbySubDivision');
+          if (sInp) sInp.value = survey;
+          if (subInp) subInp.value = subdiv;
+        }, 120);
+      });
+    });
+
+    masterSurveysContainer.appendChild(card);
+  });
+}
+
+function openMasterSurveyModal(record = null) {
+  if (!masterSurveyModal || !masterSurveyOverlay) return;
+
+  document.getElementById('masterSurveyRecordId').value = record ? record.id : '';
+  document.getElementById('masterSurveyModalTitle').innerText = record ? 'Edit Whole Survey Number & Sub-divisions' : 'Add Whole Survey Number & Sub-divisions';
+  document.getElementById('masterSurveyNumber').value = record ? record.surveyNumber : '';
+  document.getElementById('masterVillage').value = record ? (record.village || '') : '';
+  document.getElementById('masterNotes').value = record ? (record.notes || '') : '';
+
+  if (deleteMasterSurveyBtn) {
+    if (record) {
+      deleteMasterSurveyBtn.classList.remove('hidden');
+    } else {
+      deleteMasterSurveyBtn.classList.add('hidden');
+    }
+  }
+
+  if (subDivisionsContainer) {
+    subDivisionsContainer.innerHTML = '';
+    const subDivs = record && Array.isArray(record.subDivisions) && record.subDivisions.length > 0 ? record.subDivisions : [''];
+    subDivs.forEach(sd => {
+      const val = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+      addSubDivisionRowInput(val);
+    });
+  }
+
+  masterSurveyModal.classList.add('active');
+  masterSurveyOverlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMasterSurveyModal() {
+  if (!masterSurveyModal || !masterSurveyOverlay) return;
+  masterSurveyModal.classList.remove('active');
+  masterSurveyOverlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function addSubDivisionRowInput(val = '') {
+  if (!subDivisionsContainer) return;
+  const row = document.createElement('div');
+  row.className = 'name-row';
+  row.innerHTML = `
+    <input type="text" class="sub-division-input" placeholder="e.g., 1A or 2B" value="${escapeHtml(val)}">
+    <button type="button" class="remove-name-btn" aria-label="Remove Row">&times;</button>
+  `;
+  subDivisionsContainer.appendChild(row);
+
+  const removeBtn = row.querySelector('.remove-name-btn');
+  removeBtn.addEventListener('click', () => {
+    row.remove();
+  });
+}
+
+if (addMasterSurveyBtn) {
+  addMasterSurveyBtn.addEventListener('click', () => openMasterSurveyModal(null));
+}
+if (closeMasterSurveyModalBtn) {
+  closeMasterSurveyModalBtn.addEventListener('click', closeMasterSurveyModal);
+}
+if (cancelMasterSurveyBtn) {
+  cancelMasterSurveyBtn.addEventListener('click', closeMasterSurveyModal);
+}
+if (masterSurveyOverlay) {
+  masterSurveyOverlay.addEventListener('click', closeMasterSurveyModal);
+}
+if (addSubDivisionRowBtn) {
+  addSubDivisionRowBtn.addEventListener('click', () => addSubDivisionRowInput(''));
+}
+
+if (masterSurveySearchInput) {
+  masterSurveySearchInput.addEventListener('input', (e) => {
+    state.masterSurveySearchQuery = e.target.value;
+    if (clearMasterSurveySearchBtn) {
+      if (state.masterSurveySearchQuery) {
+        clearMasterSurveySearchBtn.classList.remove('hidden');
+      } else {
+        clearMasterSurveySearchBtn.classList.add('hidden');
+      }
+    }
+    renderMasterSurveysView();
+  });
+}
+
+if (clearMasterSurveySearchBtn) {
+  clearMasterSurveySearchBtn.addEventListener('click', () => {
+    state.masterSurveySearchQuery = '';
+    masterSurveySearchInput.value = '';
+    clearMasterSurveySearchBtn.classList.add('hidden');
+    renderMasterSurveysView();
+  });
+}
+
+if (masterSurveyFilterStatus) {
+  masterSurveyFilterStatus.addEventListener('change', (e) => {
+    state.masterSurveyFilterStatus = e.target.value;
+    renderMasterSurveysView();
+  });
+}
+
+if (masterSurveyForm) {
+  masterSurveyForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('masterSurveyRecordId').value;
+    const surveyNumber = document.getElementById('masterSurveyNumber').value.trim();
+    const village = document.getElementById('masterVillage').value.trim();
+    const notes = document.getElementById('masterNotes').value.trim();
+
+    const subDivInputs = subDivisionsContainer ? subDivisionsContainer.querySelectorAll('.sub-division-input') : [];
+    const subDivisions = Array.from(subDivInputs).map(inp => inp.value.trim()).filter(Boolean);
+
+    if (!surveyNumber) {
+      showToast('Whole Survey Number is required.', 'error');
+      return;
+    }
+
+    if (subDivisions.length === 0) {
+      showToast('At least one sub-division is required.', 'error');
+      return;
+    }
+
+    const payload = {
+      user_email: state.currentUser ? state.currentUser.email : 'p.manojkumar1101@gmail.com',
+      survey_number: surveyNumber,
+      sub_divisions: subDivisions,
+      village,
+      notes,
+      updated_at: new Date().toISOString()
+    };
+
+    if (state.supabaseClient && state.currentUser) {
+      try {
+        if (id) {
+          const { error } = await state.supabaseClient
+            .from('master_survey_records')
+            .update(payload)
+            .eq('id', id);
+          if (error) throw error;
+        } else {
+          payload.created_at = new Date().toISOString();
+          const { error } = await state.supabaseClient
+            .from('master_survey_records')
+            .insert([payload]);
+          if (error) throw error;
+        }
+
+        showToast(id ? 'Master survey updated in Supabase!' : 'Master survey saved to Supabase!', 'success');
+        closeMasterSurveyModal();
+        await fetchMasterSurveys();
+        return;
+      } catch (err) {
+        console.error('Supabase master survey save error:', err);
+      }
+    }
+
+    try {
+      const url = id ? `/api/master-surveys/${id}` : '/api/master-surveys';
+      const method = id ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          surveyNumber,
+          subDivisions,
+          village,
+          notes
+        })
+      });
+
+      if (!res.ok) throw new Error('API save failed');
+      showToast(id ? 'Master survey updated successfully!' : 'Master survey saved successfully!', 'success');
+      closeMasterSurveyModal();
+      await fetchMasterSurveys();
+    } catch (e) {
+      console.error('Error saving master survey via API:', e);
+      showToast('Failed to save master survey.', 'error');
+    }
+  });
+}
+
+if (deleteMasterSurveyBtn) {
+  deleteMasterSurveyBtn.addEventListener('click', async () => {
+    const id = document.getElementById('masterSurveyRecordId').value;
+    if (!id) return;
+
+    if (!confirm('Are you sure you want to delete this master survey entry?')) return;
+
+    if (state.supabaseClient && state.currentUser) {
+      try {
+        const { error } = await state.supabaseClient
+          .from('master_survey_records')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+        showToast('Master survey entry deleted.', 'success');
+        closeMasterSurveyModal();
+        await fetchMasterSurveys();
+        return;
+      } catch (err) {
+        console.error('Error deleting master survey:', err);
+      }
+    }
+
+    try {
+      await fetch(`/api/master-surveys/${id}`, { method: 'DELETE' });
+      showToast('Master survey entry deleted.', 'success');
+      closeMasterSurveyModal();
+      await fetchMasterSurveys();
+    } catch (e) {
+      showToast('Failed to delete master survey.', 'error');
+    }
+  });
+}
+

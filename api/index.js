@@ -836,6 +836,86 @@ app.delete('/api/pending-deals/:id', (req, res) => {
   res.json({ message: 'Deal deleted successfully.', id });
 });
 
+// -------------------------------------------------------------
+// Master Whole Survey & Sub-divisions REST APIs
+// -------------------------------------------------------------
+const MASTER_SURVEYS_FILE = path.join(DATA_DIR, 'master_surveys.json');
+if (!process.env.VERCEL && !fs.existsSync(MASTER_SURVEYS_FILE)) {
+  try {
+    fs.writeFileSync(MASTER_SURVEYS_FILE, JSON.stringify([], null, 2), 'utf8');
+  } catch(e) {}
+}
+
+function readMasterSurveysLocal() {
+  try {
+    if (fs.existsSync(MASTER_SURVEYS_FILE)) {
+      return JSON.parse(fs.readFileSync(MASTER_SURVEYS_FILE, 'utf8'));
+    }
+  } catch (e) {}
+  return [];
+}
+
+function writeMasterSurveysLocal(surveys) {
+  if (!process.env.VERCEL) {
+    try {
+      fs.writeFileSync(MASTER_SURVEYS_FILE, JSON.stringify(surveys, null, 2), 'utf8');
+      return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
+app.get('/api/master-surveys', (req, res) => {
+  const surveys = readMasterSurveysLocal();
+  res.json(surveys);
+});
+
+app.post('/api/master-surveys', (req, res) => {
+  const surveys = readMasterSurveysLocal();
+  const subDivs = Array.isArray(req.body.subDivisions) ? req.body.subDivisions : [];
+  const newSurvey = {
+    id: Date.now().toString(),
+    surveyNumber: (req.body.surveyNumber || '').trim(),
+    subDivisions: subDivs,
+    village: (req.body.village || '').trim(),
+    notes: (req.body.notes || '').trim(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  surveys.push(newSurvey);
+  writeMasterSurveysLocal(surveys);
+  res.status(201).json(newSurvey);
+});
+
+app.put('/api/master-surveys/:id', (req, res) => {
+  const { id } = req.params;
+  const surveys = readMasterSurveysLocal();
+  const index = surveys.findIndex(s => s.id === id);
+
+  if (index === -1) {
+    return res.status(404).json({ error: 'Master survey record not found.' });
+  }
+
+  const survey = surveys[index];
+  if (req.body.surveyNumber !== undefined) survey.surveyNumber = req.body.surveyNumber.trim();
+  if (req.body.subDivisions !== undefined) survey.subDivisions = Array.isArray(req.body.subDivisions) ? req.body.subDivisions : [];
+  if (req.body.village !== undefined) survey.village = (req.body.village || '').trim();
+  if (req.body.notes !== undefined) survey.notes = (req.body.notes || '').trim();
+
+  survey.updatedAt = new Date().toISOString();
+  writeMasterSurveysLocal(surveys);
+  res.json(survey);
+});
+
+app.delete('/api/master-surveys/:id', (req, res) => {
+  const { id } = req.params;
+  let surveys = readMasterSurveysLocal();
+  surveys = surveys.filter(s => s.id !== id);
+  writeMasterSurveysLocal(surveys);
+  res.json({ message: 'Master survey record deleted successfully.', id });
+});
+
 // Export app for Vercel serverless integration
 module.exports = app;
 
