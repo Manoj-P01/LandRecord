@@ -63,11 +63,37 @@ CREATE TABLE IF NOT EXISTS public.nearby_land_records (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Drop constraints if present from earlier schema
+-- 4. Create `pending_land_deals` table for unregistered land purchases & deals made
+CREATE TABLE IF NOT EXISTS public.pending_land_deals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_email TEXT NOT NULL DEFAULT 'p.manojkumar1101@gmail.com',
+    seller_name JSONB DEFAULT '[]'::jsonb,
+    buyer_name JSONB DEFAULT '[]'::jsonb,
+    survey_number TEXT NOT NULL,
+    sub_division TEXT,
+    patta_number TEXT,
+    land_type TEXT DEFAULT 'dry',
+    land_size JSONB DEFAULT '{"value": 0, "unit": "cent"}'::jsonb,
+    deal_status TEXT DEFAULT 'agreement_executed',
+    agreement_date DATE,
+    target_registration_date DATE,
+    total_price NUMERIC(15, 2) DEFAULT 0,
+    advance_paid NUMERIC(15, 2) DEFAULT 0,
+    district TEXT,
+    sro TEXT,
+    village TEXT,
+    notes TEXT,
+    attachments JSONB DEFAULT '{}'::jsonb,
+    is_deleted BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 ALTER TABLE public.land_records DROP CONSTRAINT IF EXISTS land_records_user_id_fkey;
 ALTER TABLE public.land_records ALTER COLUMN user_id DROP NOT NULL;
 ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS user_email TEXT NOT NULL DEFAULT 'p.manojkumar1101@gmail.com';
 ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS partitions JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS deed_type TEXT DEFAULT 'sale_deed';
 ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
 ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
@@ -75,8 +101,9 @@ ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_land_records_user_email ON public.land_records(user_email);
 CREATE INDEX IF NOT EXISTS idx_nearby_land_records_user_email ON public.nearby_land_records(user_email);
 CREATE INDEX IF NOT EXISTS idx_nearby_land_records_survey ON public.nearby_land_records(survey_number);
+CREATE INDEX IF NOT EXISTS idx_pending_land_deals_user_email ON public.pending_land_deals(user_email);
 
--- 4. Storage Bucket Setup for Documents (Patta, EC, FMB, Master FMB, Deed)
+-- 5. Storage Bucket Setup for Documents (Patta, EC, FMB, Master FMB, Deed)
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('land_documents', 'land_documents', true)
 ON CONFLICT (id) DO NOTHING;
@@ -85,3 +112,4 @@ ON CONFLICT (id) DO NOTHING;
 ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.land_records DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.nearby_land_records DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pending_land_deals DISABLE ROW LEVEL SECURITY;
