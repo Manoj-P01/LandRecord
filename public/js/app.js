@@ -4643,6 +4643,8 @@ function checkSubDivisionStatus(surveyNum, subDivName) {
   // 1. Check in My Land Records
   let foundInMyLands = false;
   let matchedMyRecord = null;
+  let totalMyCents = 0;
+  const ownerNamesSet = new Set();
 
   for (const r of state.records) {
     if (Array.isArray(r.pattas)) {
@@ -4654,11 +4656,18 @@ function checkSubDivisionStatus(surveyNum, subDivName) {
             if (pSurvey === normSurvey && (pSub === normSub || (pSurvey + '/' + pSub) === normSurvey + '/' + normSub)) {
               foundInMyLands = true;
               matchedMyRecord = r;
-              break;
+              if (parcel.landSize && parcel.landSize.value) {
+                totalMyCents += convertUnits(parcel.landSize.value, parcel.landSize.unit).cents;
+              }
+              if (Array.isArray(r.documentOwnerName)) {
+                r.documentOwnerName.forEach(n => n && ownerNamesSet.add(n.trim()));
+              }
+              if (Array.isArray(p.pattaNames)) {
+                p.pattaNames.forEach(n => n && ownerNamesSet.add(n.trim()));
+              }
             }
           }
         }
-        if (foundInMyLands) break;
       }
     } else {
       const rSurvey = (r.surveyNumber || '').trim().toLowerCase();
@@ -4666,18 +4675,30 @@ function checkSubDivisionStatus(surveyNum, subDivName) {
       if (rSurvey === normSurvey && (rSub === normSub || (rSurvey + '/' + rSub) === normSurvey + '/' + normSub)) {
         foundInMyLands = true;
         matchedMyRecord = r;
+        if (r.landSize && r.landSize.value) {
+          totalMyCents += convertUnits(r.landSize.value, r.landSize.unit).cents;
+        }
+        if (Array.isArray(r.documentOwnerName)) {
+          r.documentOwnerName.forEach(n => n && ownerNamesSet.add(n.trim()));
+        }
       }
     }
-    if (foundInMyLands) break;
   }
 
   if (foundInMyLands) {
-    return { status: 'my_lands', record: matchedMyRecord };
+    return {
+      status: 'my_lands',
+      record: matchedMyRecord,
+      recordedCents: totalMyCents,
+      ownerNames: Array.from(ownerNamesSet)
+    };
   }
 
   // 2. Check in Nearby Land Records
   let foundInNearby = false;
   let matchedNearbyRecord = null;
+  let totalNearbyCents = 0;
+  const nearbyOwnersSet = new Set();
 
   for (const nr of state.nearbyRecords) {
     const nSurvey = (nr.surveyNumber || '').trim().toLowerCase();
@@ -4685,33 +4706,62 @@ function checkSubDivisionStatus(surveyNum, subDivName) {
     if (nSurvey === normSurvey && (nSub === normSub || (nSurvey + '/' + nSub) === normSurvey + '/' + normSub)) {
       foundInNearby = true;
       matchedNearbyRecord = nr;
-      break;
+      if (nr.landSize && nr.landSize.value) {
+        totalNearbyCents += convertUnits(nr.landSize.value, nr.landSize.unit).cents;
+      }
+      if (Array.isArray(nr.pattaNames)) {
+        nr.pattaNames.forEach(n => n && nearbyOwnersSet.add(n.trim()));
+      }
     }
   }
 
   if (foundInNearby) {
-    return { status: 'nearby_lands', record: matchedNearbyRecord };
+    return {
+      status: 'nearby_lands',
+      record: matchedNearbyRecord,
+      recordedCents: totalNearbyCents,
+      ownerNames: Array.from(nearbyOwnersSet)
+    };
   }
 
-  // 3. Not found -> Pending Highlight!
-  return { status: 'pending' };
+  return { status: 'pending', recordedCents: 0, ownerNames: [] };
 }
 
 function extractSubDivisions(ms) {
   if (!ms) return [];
   const raw = Array.isArray(ms.subDivisions) ? ms.subDivisions : [];
   const result = [];
+
   raw.forEach(item => {
-    const val = typeof item === 'string' ? item : (item.name || item.subDivision || '');
-    if (val.includes(',')) {
-      const parts = val.split(',').map(s => s.trim()).filter(Boolean);
-      parts.forEach(p => {
-        if (!result.includes(p)) result.push(p);
-      });
-    } else if (val && !result.includes(val.trim())) {
-      result.push(val.trim());
+    if (typeof item === 'string') {
+      if (item.includes(',')) {
+        const parts = item.split(',').map(s => s.trim()).filter(Boolean);
+        parts.forEach(p => {
+          if (!result.some(r => r.subDivision === p)) {
+            result.push({ subDivision: p, landSize: { value: 0, unit: 'cent' } });
+          }
+        });
+      } else if (item.trim() && !result.some(r => r.subDivision === item.trim())) {
+        result.push({ subDivision: item.trim(), landSize: { value: 0, unit: 'cent' } });
+      }
+    } else if (item && typeof item === 'object') {
+      const name = (item.subDivision || item.name || '').trim();
+      const val = parseFloat(item.landSize ? item.landSize.value : (item.size || 0)) || 0;
+      const unit = (item.landSize ? item.landSize.unit : (item.unit || 'cent')) || 'cent';
+
+      if (name.includes(',')) {
+        const parts = name.split(',').map(s => s.trim()).filter(Boolean);
+        parts.forEach(p => {
+          if (!result.some(r => r.subDivision === p)) {
+            result.push({ subDivision: p, landSize: { value: val, unit: unit } });
+          }
+        });
+      } else if (name && !result.some(r => r.subDivision === name)) {
+        result.push({ subDivision: name, landSize: { value: val, unit: unit } });
+      }
     }
   });
+
   return result;
 }
 
@@ -4724,8 +4774,8 @@ function renderMasterSurveysView() {
   state.masterSurveys.forEach(ms => {
     const subDivs = extractSubDivisions(ms);
     totalSubDivs += subDivs.length;
-    subDivs.forEach(subName => {
-      const stat = checkSubDivisionStatus(ms.surveyNumber, subName);
+    subDivs.forEach(sd => {
+      const stat = checkSubDivisionStatus(ms.surveyNumber, sd.subDivision);
       if (stat.status === 'pending') totalPendingSubDivs++;
     });
   });
@@ -4742,23 +4792,23 @@ function renderMasterSurveysView() {
     const village = (ms.village || '').toLowerCase();
     const subDivs = extractSubDivisions(ms);
 
-    const matchesSearch = !q || sNum.includes(q) || village.includes(q) || subDivs.some(name => {
-      return name.toLowerCase().includes(q);
+    const matchesSearch = !q || sNum.includes(q) || village.includes(q) || subDivs.some(sd => {
+      return sd.subDivision.toLowerCase().includes(q);
     });
 
     if (!matchesSearch) return false;
 
     if (filter === 'pending') {
-      return subDivs.some(name => {
-        return checkSubDivisionStatus(ms.surveyNumber, name).status === 'pending';
+      return subDivs.some(sd => {
+        return checkSubDivisionStatus(ms.surveyNumber, sd.subDivision).status === 'pending';
       });
     } else if (filter === 'my_lands') {
-      return subDivs.some(name => {
-        return checkSubDivisionStatus(ms.surveyNumber, name).status === 'my_lands';
+      return subDivs.some(sd => {
+        return checkSubDivisionStatus(ms.surveyNumber, sd.subDivision).status === 'my_lands';
       });
     } else if (filter === 'nearby_lands') {
-      return subDivs.some(name => {
-        return checkSubDivisionStatus(ms.surveyNumber, name).status === 'nearby_lands';
+      return subDivs.some(sd => {
+        return checkSubDivisionStatus(ms.surveyNumber, sd.subDivision).status === 'nearby_lands';
       });
     }
 
@@ -4791,42 +4841,101 @@ function renderMasterSurveysView() {
 
     const subDivs = extractSubDivisions(ms);
 
+    let totalMasterCents = 0;
+    subDivs.forEach(sd => {
+      if (sd.landSize && sd.landSize.value > 0) {
+        totalMasterCents += convertUnits(sd.landSize.value, sd.landSize.unit).cents;
+      }
+    });
+
+    const masterTotalStr = totalMasterCents > 0 ? formatSizeDisplay(getDisplayValue({ value: totalMasterCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+
     let pendingCountInSurvey = 0;
     const subDivsHtml = subDivs.map(sd => {
-      const subName = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
+      const subName = sd.subDivision;
+      const masterCents = sd.landSize && sd.landSize.value > 0 ? convertUnits(sd.landSize.value, sd.landSize.unit).cents : 0;
+      const masterSizeStr = masterCents > 0 ? formatSizeDisplay(getDisplayValue({ value: masterCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+
       const matchRes = checkSubDivisionStatus(ms.surveyNumber, subName);
 
       if (matchRes.status === 'pending') {
         pendingCountInSurvey++;
         return `
-          <div class="sub-div-pill pending-highlight" style="background: rgba(245, 158, 11, 0.08); border: 1.5px solid rgba(245, 158, 11, 0.45); box-shadow: 0 0 8px rgba(245, 158, 11, 0.1); padding: 8px 12px; border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-weight: 700; font-size: 0.9rem; color: #d97706; font-family: var(--font-heading);">Sub-div <strong>${escapeHtml(subName)}</strong></span>
-              <span class="type-tag" style="background: rgba(245, 158, 11, 0.2); color: #d97706; font-size: 0.68rem; font-weight: 700; padding: 2px 6px;">⚠️ Pending Entry</span>
-            </div>
-            <div style="display: flex; gap: 6px; align-items: center;">
-              <button type="button" class="btn btn-outline btn-sm quick-add-mylands-btn" data-survey="${escapeHtml(ms.surveyNumber)}" data-subdiv="${escapeHtml(subName)}" style="font-size: 0.7rem; padding: 3px 8px; border-color: rgba(245, 158, 11, 0.5); color: #d97706; height: 24px; font-weight: 600;">
-                + Add to My Lands
-              </button>
-              <button type="button" class="btn btn-outline btn-sm quick-add-nearby-btn" data-survey="${escapeHtml(ms.surveyNumber)}" data-subdiv="${escapeHtml(subName)}" style="font-size: 0.7rem; padding: 3px 8px; height: 24px;">
-                + Add to Nearby
-              </button>
+          <div class="sub-div-pill pending-highlight" style="background: rgba(245, 158, 11, 0.08); border: 1.5px solid rgba(245, 158, 11, 0.45); box-shadow: 0 0 8px rgba(245, 158, 11, 0.1); padding: 10px 14px; border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-weight: 700; font-size: 0.95rem; color: #d97706; font-family: var(--font-heading);">
+                  Sub-div <strong>${escapeHtml(subName)}</strong>
+                  ${masterSizeStr ? `<span style="font-size: 0.82rem; color: #d97706; font-weight: 700; margin-left: 6px;">(${masterSizeStr})</span>` : ''}
+                </span>
+                <span class="type-tag" style="background: rgba(245, 158, 11, 0.2); color: #d97706; font-size: 0.7rem; font-weight: 700; padding: 2px 6px;">⚠️ Pending Entry</span>
+              </div>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <button type="button" class="btn btn-outline btn-sm quick-add-mylands-btn" data-survey="${escapeHtml(ms.surveyNumber)}" data-subdiv="${escapeHtml(subName)}" style="font-size: 0.7rem; padding: 3px 8px; border-color: rgba(245, 158, 11, 0.5); color: #d97706; height: 26px; font-weight: 600;">
+                  + Add to My Lands
+                </button>
+                <button type="button" class="btn btn-outline btn-sm quick-add-nearby-btn" data-survey="${escapeHtml(ms.surveyNumber)}" data-subdiv="${escapeHtml(subName)}" style="font-size: 0.7rem; padding: 3px 8px; height: 26px;">
+                  + Add to Nearby
+                </button>
+              </div>
             </div>
           </div>
         `;
       } else if (matchRes.status === 'my_lands') {
         const docNo = matchRes.record ? matchRes.record.documentNumber : '';
+        const recCents = matchRes.recordedCents || 0;
+        const recSizeStr = recCents > 0 ? formatSizeDisplay(getDisplayValue({ value: recCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+        const ownerNamesStr = matchRes.ownerNames && matchRes.ownerNames.length > 0 ? matchRes.ownerNames.join(', ') : '';
+        const balanceCents = masterCents > 0 ? (masterCents - recCents) : 0;
+        const hasBalance = masterCents > 0 && balanceCents > 0.01;
+        const balanceSizeStr = hasBalance ? formatSizeDisplay(getDisplayValue({ value: balanceCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+
         return `
-          <div class="sub-div-pill recorded-my-lands" style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.25); padding: 8px 12px; border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary);">Sub-div <strong>${escapeHtml(subName)}</strong></span>
-            <span class="type-tag wet" style="font-size: 0.7rem; padding: 2px 8px;">✓ Recorded in My Lands ${docNo ? `(Doc ${docNo})` : ''}</span>
+          <div class="sub-div-pill recorded-my-lands" style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.3); padding: 10px 14px; border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">
+                Sub-div <strong>${escapeHtml(subName)}</strong>
+                ${masterSizeStr ? `<span style="font-size: 0.8rem; color: var(--primary); font-weight: 600; margin-left: 6px;">(${masterSizeStr})</span>` : ''}
+              </span>
+              <span class="type-tag wet" style="font-size: 0.72rem; padding: 2px 8px;">✓ Recorded in My Lands ${docNo ? `(Doc ${docNo})` : ''}</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--text-secondary); gap: 8px; border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 6px;">
+              ${ownerNamesStr ? `<span><strong>Owner(s):</strong> <span class="owner-chip doc-owner-chip" style="font-size: 0.7rem;">${escapeHtml(ownerNamesStr)}</span></span>` : ''}
+              ${recSizeStr ? `<span><strong>My Land Size:</strong> <span style="color: var(--success); font-weight: 700;">${recSizeStr}</span></span>` : ''}
+              ${hasBalance ? `
+                <span style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #d97706; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">
+                  ⚠️ Balance Remaining: ${balanceSizeStr}
+                </span>
+              ` : ''}
+            </div>
           </div>
         `;
       } else {
+        const recCents = matchRes.recordedCents || 0;
+        const recSizeStr = recCents > 0 ? formatSizeDisplay(getDisplayValue({ value: recCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+        const ownerNamesStr = matchRes.ownerNames && matchRes.ownerNames.length > 0 ? matchRes.ownerNames.join(', ') : '';
+        const balanceCents = masterCents > 0 ? (masterCents - recCents) : 0;
+        const hasBalance = masterCents > 0 && balanceCents > 0.01;
+        const balanceSizeStr = hasBalance ? formatSizeDisplay(getDisplayValue({ value: balanceCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+
         return `
-          <div class="sub-div-pill recorded-nearby-lands" style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.25); padding: 8px 12px; border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary);">Sub-div <strong>${escapeHtml(subName)}</strong></span>
-            <span class="type-tag commercial" style="font-size: 0.7rem; padding: 2px 8px;">✓ Recorded in Nearby Lands</span>
+          <div class="sub-div-pill recorded-nearby-lands" style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.3); padding: 10px 14px; border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">
+                Sub-div <strong>${escapeHtml(subName)}</strong>
+                ${masterSizeStr ? `<span style="font-size: 0.8rem; color: var(--primary); font-weight: 600; margin-left: 6px;">(${masterSizeStr})</span>` : ''}
+              </span>
+              <span class="type-tag commercial" style="font-size: 0.72rem; padding: 2px 8px;">✓ Recorded in Nearby Lands</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--text-secondary); gap: 8px; border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 6px;">
+              ${ownerNamesStr ? `<span><strong>Patta Owner(s):</strong> <span class="owner-chip" style="font-size: 0.7rem;">${escapeHtml(ownerNamesStr)}</span></span>` : ''}
+              ${recSizeStr ? `<span><strong>Nearby Size:</strong> <span style="color: var(--primary); font-weight: 700;">${recSizeStr}</span></span>` : ''}
+              ${hasBalance ? `
+                <span style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #d97706; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">
+                  ⚠️ Balance Remaining: ${balanceSizeStr}
+                </span>
+              ` : ''}
+            </div>
           </div>
         `;
       }
@@ -4856,9 +4965,9 @@ function renderMasterSurveysView() {
 
       <div class="form-group" style="margin-top: 12px;">
         <label style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">
-          Sub-divisions (${subDivs.length} total)
+          Sub-divisions (${subDivs.length} total ${masterTotalStr ? `| Total Area: ${masterTotalStr}` : ''})
         </label>
-        <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 6px;">
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
           ${subDivsHtml || '<span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">No sub-divisions registered.</span>'}
         </div>
       </div>
@@ -4936,10 +5045,10 @@ function openMasterSurveyModal(record = null) {
 
   if (subDivisionsContainer) {
     subDivisionsContainer.innerHTML = '';
-    const subDivs = record && Array.isArray(record.subDivisions) && record.subDivisions.length > 0 ? record.subDivisions : [''];
+    const subDivs = record ? extractSubDivisions(record) : [{ subDivision: '', landSize: { value: 0, unit: 'cent' } }];
+    if (subDivs.length === 0) subDivs.push({ subDivision: '', landSize: { value: 0, unit: 'cent' } });
     subDivs.forEach(sd => {
-      const val = typeof sd === 'string' ? sd : (sd.name || sd.subDivision || '');
-      addSubDivisionRowInput(val);
+      addSubDivisionRowInput(sd);
     });
   }
 
@@ -4955,12 +5064,25 @@ function closeMasterSurveyModal() {
   document.body.style.overflow = '';
 }
 
-function addSubDivisionRowInput(val = '') {
+function addSubDivisionRowInput(sdObj = null) {
   if (!subDivisionsContainer) return;
+  const name = typeof sdObj === 'string' ? sdObj : (sdObj ? (sdObj.subDivision || sdObj.name || '') : '');
+  const sizeVal = sdObj && sdObj.landSize && sdObj.landSize.value > 0 ? sdObj.landSize.value : '';
+  const unit = sdObj && sdObj.landSize && sdObj.landSize.unit ? sdObj.landSize.unit : 'cent';
+
   const row = document.createElement('div');
-  row.className = 'name-row';
+  row.className = 'name-row master-subdiv-row';
+  row.style.cssText = 'display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;';
   row.innerHTML = `
-    <input type="text" class="sub-division-input" placeholder="e.g. 1, 2, 3, 4C2A1, 5B (comma separated allowed)" value="${escapeHtml(val)}">
+    <input type="text" class="sub-division-input" placeholder="Sub-div (e.g. 31 or 1,2,3)" value="${escapeHtml(name)}" style="flex: 2; min-width: 130px;">
+    <div style="display: flex; gap: 4px; flex: 1.5; min-width: 140px;">
+      <input type="number" step="any" class="sub-division-size-input" placeholder="Size (e.g. 50)" value="${sizeVal}" style="width: 60%; font-size: 0.85rem; padding: 8px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary);">
+      <select class="sub-division-unit-select select-input" style="width: 40%; padding: 6px 4px; font-size: 0.8rem;">
+        <option value="cent" ${unit === 'cent' ? 'selected' : ''}>Cent</option>
+        <option value="sqft" ${unit === 'sqft' ? 'selected' : ''}>Sq Ft</option>
+        <option value="acre" ${unit === 'acre' ? 'selected' : ''}>Acre</option>
+      </select>
+    </div>
     <button type="button" class="remove-name-btn" aria-label="Remove Row">&times;</button>
   `;
   subDivisionsContainer.appendChild(row);
@@ -4974,8 +5096,10 @@ function addSubDivisionRowInput(val = '') {
       const parts = rawVal.split(',').map(s => s.trim()).filter(Boolean);
       if (parts.length > 0) {
         inputEl.value = parts[0];
+        const sVal = row.querySelector('.sub-division-size-input').value;
+        const uVal = row.querySelector('.sub-division-unit-select').value;
         for (let i = 1; i < parts.length; i++) {
-          addSubDivisionRowInput(parts[i]);
+          addSubDivisionRowInput({ subDivision: parts[i], landSize: { value: parseFloat(sVal) || 0, unit: uVal } });
         }
       }
     }
@@ -5043,15 +5167,25 @@ if (masterSurveyForm) {
     const village = document.getElementById('masterVillage').value.trim();
     const notes = document.getElementById('masterNotes').value.trim();
 
-    const subDivInputs = subDivisionsContainer ? subDivisionsContainer.querySelectorAll('.sub-division-input') : [];
+    const subDivRows = subDivisionsContainer ? subDivisionsContainer.querySelectorAll('.master-subdiv-row, .name-row') : [];
     const subDivisions = [];
-    Array.from(subDivInputs).forEach(inp => {
-      const val = inp.value.trim();
-      if (val) {
-        const parts = val.split(',').map(s => s.trim()).filter(Boolean);
+    subDivRows.forEach(row => {
+      const nameInp = row.querySelector('.sub-division-input');
+      const sizeInp = row.querySelector('.sub-division-size-input');
+      const unitSel = row.querySelector('.sub-division-unit-select');
+
+      const nameVal = nameInp ? nameInp.value.trim() : '';
+      const sizeVal = sizeInp ? (parseFloat(sizeInp.value) || 0) : 0;
+      const unitVal = unitSel ? unitSel.value : 'cent';
+
+      if (nameVal) {
+        const parts = nameVal.split(',').map(s => s.trim()).filter(Boolean);
         parts.forEach(p => {
-          if (!subDivisions.includes(p)) {
-            subDivisions.push(p);
+          if (!subDivisions.some(sd => sd.subDivision === p)) {
+            subDivisions.push({
+              subDivision: p,
+              landSize: { value: sizeVal, unit: unitVal }
+            });
           }
         });
       }
