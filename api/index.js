@@ -516,6 +516,7 @@ app.post('/api/records', async (req, res) => {
   const newRecord = {
     id: Date.now().toString(),
     documentNumber: documentNumber.trim(),
+    deedType: (req.body.deedType || 'sale_deed').trim().toLowerCase(),
     documentOwnerName: docOwners,
     purchasedFrom: sellers,
     purchaseDate: purchaseDate || null,
@@ -524,6 +525,7 @@ app.post('/api/records', async (req, res) => {
     sro: (sro || '').trim(),
     village: (village || '').trim(),
     notes: (notes || '').trim(),
+    partitions: Array.isArray(req.body.partitions) ? req.body.partitions : [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -544,6 +546,7 @@ app.put('/api/records/:id', async (req, res) => {
   const { id } = req.params;
   const {
     documentNumber,
+    deedType,
     documentOwnerName,
     purchaseDate,
     purchasedFrom,
@@ -551,7 +554,8 @@ app.put('/api/records/:id', async (req, res) => {
     sro,
     village,
     pattas,
-    notes
+    notes,
+    partitions
   } = req.body;
 
   const records = await readRecords();
@@ -565,6 +569,7 @@ app.put('/api/records/:id', async (req, res) => {
   const record = records[index];
 
   if (documentNumber !== undefined) record.documentNumber = documentNumber.trim();
+  if (deedType !== undefined) record.deedType = (deedType || 'sale_deed').trim().toLowerCase();
   if (documentOwnerName !== undefined) {
     record.documentOwnerName = Array.isArray(documentOwnerName) ? documentOwnerName.map(name => name.trim()).filter(Boolean) : (typeof documentOwnerName === 'string' && documentOwnerName.trim() ? [documentOwnerName.trim()] : []);
   }
@@ -576,6 +581,7 @@ app.put('/api/records/:id', async (req, res) => {
   if (sro !== undefined) record.sro = (sro || '').trim();
   if (village !== undefined) record.village = (village || '').trim();
   if (notes !== undefined) record.notes = (notes || '').trim();
+  if (partitions !== undefined && Array.isArray(partitions)) record.partitions = partitions;
 
   if (pattas !== undefined && Array.isArray(pattas)) {
     const formattedPattas = pattas.map(p => {
@@ -723,6 +729,111 @@ app.post('/api/records/import', async (req, res) => {
   } else {
     res.status(500).json({ error: 'Failed to write import.' });
   }
+});
+
+// -------------------------------------------------------------
+// Pending Land Deals REST APIs
+// -------------------------------------------------------------
+const PENDING_DEALS_FILE = path.join(DATA_DIR, 'pending_land_deals.json');
+if (!process.env.VERCEL && !fs.existsSync(PENDING_DEALS_FILE)) {
+  try {
+    fs.writeFileSync(PENDING_DEALS_FILE, JSON.stringify([], null, 2), 'utf8');
+  } catch(e) {}
+}
+
+function readPendingDealsLocal() {
+  try {
+    if (fs.existsSync(PENDING_DEALS_FILE)) {
+      return JSON.parse(fs.readFileSync(PENDING_DEALS_FILE, 'utf8'));
+    }
+  } catch (e) {}
+  return [];
+}
+
+function writePendingDealsLocal(deals) {
+  if (!process.env.VERCEL) {
+    try {
+      fs.writeFileSync(PENDING_DEALS_FILE, JSON.stringify(deals, null, 2), 'utf8');
+      return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
+app.get('/api/pending-deals', (req, res) => {
+  const deals = readPendingDealsLocal();
+  res.json(deals);
+});
+
+app.post('/api/pending-deals', (req, res) => {
+  const deals = readPendingDealsLocal();
+  const newDeal = {
+    id: Date.now().toString(),
+    sellerName: Array.isArray(req.body.sellerName) ? req.body.sellerName : [req.body.sellerName || ''],
+    buyerName: Array.isArray(req.body.buyerName) ? req.body.buyerName : [req.body.buyerName || ''],
+    surveyNumber: (req.body.surveyNumber || '').trim(),
+    subDivision: (req.body.subDivision || '').trim(),
+    pattaNumber: (req.body.pattaNumber || '').trim(),
+    landType: (req.body.landType || 'dry').trim().toLowerCase(),
+    landSize: req.body.landSize || { value: 0, unit: 'cent' },
+    dealStatus: req.body.dealStatus || 'agreement_executed',
+    agreementDate: req.body.agreementDate || null,
+    targetRegistrationDate: req.body.targetRegistrationDate || null,
+    totalPrice: parseFloat(req.body.totalPrice) || 0,
+    advancePaid: parseFloat(req.body.advancePaid) || 0,
+    district: (req.body.district || '').trim(),
+    sro: (req.body.sro || '').trim(),
+    village: (req.body.village || '').trim(),
+    notes: (req.body.notes || '').trim(),
+    attachments: req.body.attachments || {},
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  deals.push(newDeal);
+  writePendingDealsLocal(deals);
+  res.status(201).json(newDeal);
+});
+
+app.put('/api/pending-deals/:id', (req, res) => {
+  const { id } = req.params;
+  const deals = readPendingDealsLocal();
+  const index = deals.findIndex(d => d.id === id);
+
+  if (index === -1) {
+    return res.status(404).json({ error: 'Deal not found.' });
+  }
+
+  const deal = deals[index];
+  if (req.body.sellerName !== undefined) deal.sellerName = Array.isArray(req.body.sellerName) ? req.body.sellerName : [req.body.sellerName];
+  if (req.body.buyerName !== undefined) deal.buyerName = Array.isArray(req.body.buyerName) ? req.body.buyerName : [req.body.buyerName];
+  if (req.body.surveyNumber !== undefined) deal.surveyNumber = req.body.surveyNumber.trim();
+  if (req.body.subDivision !== undefined) deal.subDivision = req.body.subDivision.trim();
+  if (req.body.pattaNumber !== undefined) deal.pattaNumber = req.body.pattaNumber.trim();
+  if (req.body.landType !== undefined) deal.landType = req.body.landType.trim().toLowerCase();
+  if (req.body.landSize !== undefined) deal.landSize = req.body.landSize;
+  if (req.body.dealStatus !== undefined) deal.dealStatus = req.body.dealStatus;
+  if (req.body.agreementDate !== undefined) deal.agreementDate = req.body.agreementDate;
+  if (req.body.targetRegistrationDate !== undefined) deal.targetRegistrationDate = req.body.targetRegistrationDate;
+  if (req.body.totalPrice !== undefined) deal.totalPrice = parseFloat(req.body.totalPrice) || 0;
+  if (req.body.advancePaid !== undefined) deal.advancePaid = parseFloat(req.body.advancePaid) || 0;
+  if (req.body.district !== undefined) deal.district = req.body.district.trim();
+  if (req.body.sro !== undefined) deal.sro = req.body.sro.trim();
+  if (req.body.village !== undefined) deal.village = req.body.village.trim();
+  if (req.body.notes !== undefined) deal.notes = req.body.notes.trim();
+  if (req.body.attachments !== undefined) deal.attachments = req.body.attachments;
+
+  deal.updatedAt = new Date().toISOString();
+  writePendingDealsLocal(deals);
+  res.json(deal);
+});
+
+app.delete('/api/pending-deals/:id', (req, res) => {
+  const { id } = req.params;
+  let deals = readPendingDealsLocal();
+  deals = deals.filter(d => d.id !== id);
+  writePendingDealsLocal(deals);
+  res.json({ message: 'Deal deleted successfully.', id });
 });
 
 // Export app for Vercel serverless integration

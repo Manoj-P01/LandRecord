@@ -6,16 +6,99 @@ const state = {
   nearbyRecords: [],
   searchQuery: '',
   nearbySearchQuery: '',
-  activeView: 'myLands', // 'myLands' | 'nearbyLands'
+  transfereeSearchQuery: '',
+  transfereeLandTypeFilter: 'all', // 'all' | 'wet' | 'dry' | 'residential' | 'commercial' | 'well'
+  activeView: 'myLands', // 'myLands' | 'nearbyLands' | 'transferee'
   pattaFilter: 'all', // 'all' | 'transferred' | 'pending'
   landTypeFilter: 'all', // 'all' | 'wet' | 'dry' | 'residential' | 'commercial'
+  filterDeedType: 'all', // 'all' | 'sale_deed' | 'partition_deed' | 'gift_deed' | etc.
   nameFilter: 'all', // 'all' | '[name]'
   sortBy: 'newest', // 'newest' | 'oldest' | 'size-desc' | 'size-asc' | 'survey'
   displayUnit: 'cent', // 'cent' | 'sqft' | 'acre'
+  selectedItemCentsMap: {},
   supabaseClient: null,
   currentUser: null,
   isSupabaseConfigured: false
 };
+
+function updateSelectionSummary() {
+  const bar = document.getElementById('selectionSummaryBar');
+  const countBadge = document.getElementById('selectedCountBadge');
+  const sumCent = document.getElementById('sumCent');
+  const sumSqft = document.getElementById('sumSqft');
+  const sumAcre = document.getElementById('sumAcre');
+  const sumAre = document.getElementById('sumAre');
+
+  if (!bar) return;
+
+  const keys = Object.keys(state.selectedItemCentsMap);
+  if (keys.length === 0) {
+    bar.classList.add('hidden');
+    return;
+  }
+
+  let totalCents = 0;
+  keys.forEach(k => {
+    totalCents += state.selectedItemCentsMap[k] || 0;
+  });
+
+  const conversions = convertUnits(totalCents, 'cent');
+
+  if (countBadge) countBadge.innerText = `${keys.length} Selected`;
+  if (sumCent) sumCent.innerText = formatSizeDisplay(conversions.cents, 'cent');
+  if (sumSqft) sumSqft.innerText = formatSizeDisplay(conversions.sqft, 'sqft');
+  if (sumAcre) sumAcre.innerText = formatSizeDisplay(conversions.acres, 'acre');
+  if (sumAre) sumAre.innerText = formatSizeDisplay(conversions.ares, 'are');
+
+  bar.classList.remove('hidden');
+}
+
+function handleLandCheckboxChange(cb) {
+  const key = cb.dataset.key;
+  const cents = parseFloat(cb.dataset.cents) || 0;
+  if (!key) return;
+
+  const card = cb.closest('.land-card, .record-card, tr');
+  if (cb.checked) {
+    state.selectedItemCentsMap[key] = cents;
+    if (card) card.classList.add('selected-card');
+  } else {
+    delete state.selectedItemCentsMap[key];
+    if (card) card.classList.remove('selected-card');
+  }
+  updateSelectionSummary();
+}
+
+function clearAllSelections() {
+  state.selectedItemCentsMap = {};
+  document.querySelectorAll('.land-select-checkbox, .partition-select-checkbox').forEach(cb => {
+    cb.checked = false;
+    const card = cb.closest('.land-card, .record-card, tr');
+    if (card) card.classList.remove('selected-card');
+  });
+  updateSelectionSummary();
+}
+
+function selectAllVisibleItems() {
+  document.querySelectorAll('.land-select-checkbox, .partition-select-checkbox').forEach(cb => {
+    cb.checked = true;
+    const key = cb.dataset.key;
+    const cents = parseFloat(cb.dataset.cents) || 0;
+    if (key) {
+      state.selectedItemCentsMap[key] = cents;
+    }
+    const card = cb.closest('.land-card, .record-card, tr');
+    if (card) card.classList.add('selected-card');
+  });
+  updateSelectionSummary();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const clearBtn = document.getElementById('clearSelectionBtn');
+  const selectAllBtn = document.getElementById('selectAllBtn');
+  if (clearBtn) clearBtn.addEventListener('click', clearAllSelections);
+  if (selectAllBtn) selectAllBtn.addEventListener('click', selectAllVisibleItems);
+});
 
 function isValidFileUrl(url) {
   if (!url || typeof url !== 'string') return false;
@@ -1107,6 +1190,7 @@ function openDrawer(record = null) {
     document.getElementById('drawerTitle').innerText = 'Land Record Details';
     document.getElementById('recordId').value = record.id;
     document.getElementById('documentNumber').value = record.documentNumber;
+    document.getElementById('deedType').value = record.deedType || 'sale_deed';
     document.getElementById('purchaseDate').value = record.purchaseDate ? record.purchaseDate.split('T')[0] : '';
     
     // Fallback fields for legacy selectors
@@ -1139,9 +1223,28 @@ function openDrawer(record = null) {
     updateAttachmentUI('ec', atts.ec);
     updateAttachmentUI('fmb', atts.fmb);
 
+    // Populate drawer metadata dates
+    const drawerMetadataEl = document.getElementById('drawerRecordMetadata');
+    const metaCreatedEl = document.getElementById('metaCreatedDate');
+    const metaUpdatedEl = document.getElementById('metaUpdatedDate');
+    if (drawerMetadataEl) {
+      drawerMetadataEl.classList.remove('hidden');
+      const cDate = record.createdAt ? new Date(record.createdAt) : null;
+      const uDate = record.updatedAt ? new Date(record.updatedAt) : (cDate || null);
+      
+      const cStr = cDate && !isNaN(cDate.getTime()) ? cDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+      const uStr = uDate && !isNaN(uDate.getTime()) ? uDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : cStr;
+      
+      if (metaCreatedEl) metaCreatedEl.innerText = cStr;
+      if (metaUpdatedEl) metaUpdatedEl.innerText = uStr;
+    }
+
     // Disable all inputs for viewing
     toggleFormEditable(false);
   } else {
+    const drawerMetadataEl = document.getElementById('drawerRecordMetadata');
+    if (drawerMetadataEl) drawerMetadataEl.classList.add('hidden');
+
     // Add Mode (editable from the start)
     document.getElementById('drawerTitle').innerText = 'Add Land Record';
     document.getElementById('recordId').value = '';
@@ -1153,6 +1256,7 @@ function openDrawer(record = null) {
     document.getElementById('surveyNumber').value = '';
     document.getElementById('subDivision').value = '';
     document.getElementById('pattaNumber').value = '';
+    document.getElementById('deedType').value = 'sale_deed';
     document.getElementById('landType').value = 'dry';
     document.getElementById('isPattaTransferred').value = 'false';
     resetDocumentInputs();
@@ -1330,10 +1434,12 @@ function openPartitionModal(record) {
   const buyerInput = document.getElementById('partitionBuyerName');
   const sizeInput = document.getElementById('partitionSizeValue');
   const notesInput = document.getElementById('partitionNotes');
+  const landTypeInput = document.getElementById('partitionLandTypeInput');
 
   if (buyerInput) buyerInput.value = '';
   if (sizeInput) sizeInput.value = '';
   if (notesInput) notesInput.value = '';
+  if (landTypeInput) landTypeInput.value = record.landType || 'dry';
 
   // Populate target Patta & Parcel dropdown
   if (partitionTargetPatta) {
@@ -1426,6 +1532,8 @@ if (partitionForm) {
     const type = document.getElementById('partitionType').value;
     const buyerName = document.getElementById('partitionBuyerName').value.trim();
     const targetPattaLabel = partitionTargetPatta.value;
+    const landTypeInputEl = document.getElementById('partitionLandTypeInput');
+    const landType = landTypeInputEl ? landTypeInputEl.value : (record.landType || 'dry');
     const sizeVal = parseFloat(document.getElementById('partitionSizeValue').value);
     const sizeUnit = document.getElementById('partitionSizeUnit').value;
     const notes = document.getElementById('partitionNotes').value.trim();
@@ -1472,7 +1580,7 @@ if (partitionForm) {
       type,
       buyerName,
       targetPattaLabel,
-      landType: record.landType || 'dry',
+      landType: landType,
       size: { value: sizeVal, unit: sizeUnit },
       notes,
       createdAt: new Date().toISOString()
@@ -1514,6 +1622,7 @@ recordForm.addEventListener('submit', async (e) => {
 
   const id = document.getElementById('recordId').value;
   const documentNumber = document.getElementById('documentNumber').value;
+  const deedTypeVal = document.getElementById('deedType').value;
   const purchaseDate = document.getElementById('purchaseDate').value;
   const districtVal = district.value;
   const sroVal = sro.value;
@@ -1618,6 +1727,7 @@ recordForm.addEventListener('submit', async (e) => {
 
   const payload = {
     documentNumber,
+    deedType: deedTypeVal,
     documentOwnerName: docOwnersVal,
     purchasedFrom: sellersVal,
     purchaseDate: purchaseDate || null,
@@ -1626,7 +1736,8 @@ recordForm.addEventListener('submit', async (e) => {
     sro: sroVal,
     village: villageVal,
     notes: notesTextarea.value.trim(),
-    uploadedAttachments: tempAttachments
+    uploadedAttachments: tempAttachments,
+    partitions: state.activeRecord ? (state.activeRecord.partitions || []) : []
   };
 
   // If Supabase Client and User are authenticated, write directly to Supabase DB & Storage
@@ -1662,6 +1773,7 @@ recordForm.addEventListener('submit', async (e) => {
         user_email: state.currentUser ? state.currentUser.email : 'p.manojkumar1101@gmail.com',
         user_id: (state.currentUser && state.currentUser.id) ? state.currentUser.id : null,
         document_number: documentNumber,
+        deed_type: deedTypeVal,
         document_owner_name: docOwnersVal,
         purchased_from: sellersVal,
         purchase_date: purchaseDate || null,
@@ -1674,6 +1786,10 @@ recordForm.addEventListener('submit', async (e) => {
         partitions: state.activeRecord ? (state.activeRecord.partitions || []) : [],
         updated_at: new Date().toISOString()
       };
+
+      if (!id) {
+        dbPayload.created_at = new Date().toISOString();
+      }
 
       if (id) {
         const { error } = await state.supabaseClient
@@ -1820,6 +1936,7 @@ async function fetchRecords() {
         const rec = {
           id: r.id,
           documentNumber: r.document_number,
+          deedType: r.deed_type || r.deedType || 'sale_deed',
           documentOwnerName: typeof r.document_owner_name === 'string' ? JSON.parse(r.document_owner_name) : (r.document_owner_name || []),
           purchasedFrom: typeof r.purchased_from === 'string' ? JSON.parse(r.purchased_from) : (r.purchased_from || []),
           purchaseDate: r.purchase_date,
@@ -1996,14 +2113,10 @@ function getFilteredAndSortedRecords() {
           record.pattas.forEach(p => {
             if (Array.isArray(p.parcels)) {
               p.parcels.forEach(parcel => {
-                if (parcel.landType === state.landTypeFilter) {
-                  hasMatchingType = true;
-                }
+                if ((parcel.landType || 'dry') === state.landTypeFilter) hasMatchingType = true;
               });
             }
           });
-        } else {
-          hasMatchingType = (record.landType === state.landTypeFilter);
         }
         if (!hasMatchingType) return false;
       }
@@ -2024,6 +2137,16 @@ function getFilteredAndSortedRecords() {
         const dateA = a.purchaseDate ? new Date(a.purchaseDate) : new Date(0);
         const dateB = b.purchaseDate ? new Date(b.purchaseDate) : new Date(0);
         return dateA - dateB || new Date(a.createdAt) - new Date(b.createdAt);
+      }
+      if (state.sortBy === 'last-updated') {
+        const dateA = a.updatedAt ? new Date(a.updatedAt) : (a.createdAt ? new Date(a.createdAt) : new Date(0));
+        const dateB = b.updatedAt ? new Date(b.updatedAt) : (b.createdAt ? new Date(b.createdAt) : new Date(0));
+        return dateB - dateA;
+      }
+      if (state.sortBy === 'created-newest') {
+        const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+        const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
+        return dateB - dateA;
       }
       if (state.sortBy === 'size-desc') {
         const centsA = convertUnits(a.landSize.value, a.landSize.unit).cents;
@@ -2097,10 +2220,15 @@ function renderRecordsList() {
     const docOwnersHtml = (Array.isArray(record.documentOwnerName) ? record.documentOwnerName : [record.documentOwnerName]).map(name => `<span class="owner-chip doc-owner-chip">${name}</span>`).join('');
     const sellersHtml = (Array.isArray(record.purchasedFrom) ? record.purchasedFrom : [record.purchasedFrom]).filter(Boolean).map(name => `<span class="owner-chip seller-chip">${name}</span>`).join('');
 
-    // Format purchase date for card
+    // Format purchase date & created/updated dates for card
     const dateFormatted = record.purchaseDate ? new Date(record.purchaseDate).toLocaleDateString(undefined, {
       year: 'numeric', month: 'short', day: 'numeric'
     }) : 'N/A';
+
+    const cDateObj = record.createdAt ? new Date(record.createdAt) : null;
+    const uDateObj = record.updatedAt ? new Date(record.updatedAt) : (cDateObj || null);
+    const createdFormatted = cDateObj && !isNaN(cDateObj.getTime()) ? cDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
+    const updatedFormatted = uDateObj && !isNaN(uDateObj.getTime()) ? uDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : (createdFormatted || 'N/A');
 
     // Survey tag header formatting: merge unique surveys from all pattas
     let surveyHeaderText = '';
@@ -2194,15 +2322,37 @@ function renderRecordsList() {
       well: 'Well (Kenaru)'
     }[record.landType || 'dry'] || 'Dry (Punjai)';
 
-    const sellersText = sellersHtml ? `<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;"><span class="lbl" style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; font-family: var(--font-heading); font-weight: 500;">From:</span> <div class="owners-list">${sellersHtml}</div></div>` : '';
+    const totalRecordCents = convertUnits(record.landSize.value, record.landSize.unit).cents;
+    const isSelected = !!state.selectedItemCentsMap['rec_' + record.id];
+
+    const deedTypeLabels = {
+      sale_deed: 'Sale Deed',
+      partition_deed: 'Partition Deed',
+      gift_deed: 'Gift Deed',
+      settlement_deed: 'Settlement Deed',
+      exchange_deed: 'Exchange Deed',
+      release_deed: 'Release Deed',
+      inheritance: 'Inheritance',
+      will: 'Will / Testament',
+      court_decree: 'Court Decree'
+    };
+
+    const deedLabel = deedTypeLabels[record.deedType || 'sale_deed'] || 'Sale Deed';
 
     card.innerHTML = `
       <div class="card-top">
-        <div class="survey-tag">
-          <span class="number">${surveyHeaderText}</span>
-          <span class="label">Survey No / Sub-div</span>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <label class="card-select-label" onclick="event.stopPropagation();" title="Select for sum calculation">
+            <input type="checkbox" class="land-select-checkbox" data-key="rec_${record.id}" data-cents="${totalRecordCents}" ${isSelected ? 'checked' : ''} onchange="handleLandCheckboxChange(this)">
+            <span class="checkbox-custom"></span>
+          </label>
+          <div class="survey-tag">
+            <span class="number">${surveyHeaderText}</span>
+            <span class="label">Survey No / Sub-div</span>
+          </div>
         </div>
         <div class="card-tags">
+          <span class="type-tag ${record.deedType || 'sale_deed'}" style="background: rgba(99, 102, 241, 0.14); color: var(--primary); border: 1px solid rgba(99, 102, 241, 0.3); font-weight: 600; font-size: 0.68rem; padding: 2px 6px;">${deedLabel}</span>
           <span class="type-tag ${record.landType || 'dry'}">${typeLabel}</span>
           <span class="patta-status-tag ${record.isPattaTransferred ? 'transferred' : 'pending'}">
             ${record.isPattaTransferred ? 'Transferred' : 'Pending'}
@@ -2220,9 +2370,15 @@ function renderRecordsList() {
           <span class="val" style="color: var(--primary); font-weight: 700;">${sizeString}</span>
         </div>
         <div class="info-item" style="grid-column: span 2;">
-          <span class="lbl">Document Owner(s)</span>
+          <span class="lbl">Current Document Owner(s)</span>
           <div class="owners-list">${docOwnersHtml}</div>
         </div>
+        ${sellersHtml ? `
+        <div class="info-item" style="grid-column: span 2;">
+          <span class="lbl">Previous Owner Name(s) (Seller)</span>
+          <div class="owners-list">${sellersHtml}</div>
+        </div>
+        ` : ''}
         <div class="info-item" style="grid-column: span 2;">
           <span class="lbl" style="margin-bottom: 6px;">Pattas & Parcels</span>
           <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -2326,7 +2482,6 @@ function renderRecordsList() {
       <div class="card-footer" style="align-items: flex-start;">
         <div class="purchase-details">
           <span>Purchased: <strong>${dateFormatted}</strong></span>
-          ${sellersText}
         </div>
         <div style="display: flex; align-items: center; gap: 6px;">
           <button type="button" class="btn btn-outline btn-sm partition-trigger" data-id="${record.id}" style="padding: 4px 8px; font-size: 0.7rem; border-radius: var(--radius-xs); height: 26px; font-family: var(--font-body); font-weight: 500;">
@@ -2338,6 +2493,10 @@ function renderRecordsList() {
           </button>
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
         </div>
+      </div>
+      <div class="card-timestamps" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; color: var(--text-muted); border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 8px; margin-top: -4px; flex-wrap: wrap; gap: 8px;">
+        <span><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -1px; color: var(--text-muted);"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>Created: <strong style="color: var(--text-secondary); font-weight: 500;">${createdFormatted || 'N/A'}</strong></span>
+        <span><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: -1px; color: var(--primary);"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>Last Changed: <strong style="color: var(--primary); font-weight: 600;">${updatedFormatted}</strong></span>
       </div>
     `;
 
@@ -2399,6 +2558,14 @@ filterName.addEventListener('change', () => {
   renderRecordsList();
 });
 
+const filterDeedType = document.getElementById('filterDeedType');
+if (filterDeedType) {
+  filterDeedType.addEventListener('change', () => {
+    state.filterDeedType = filterDeedType.value;
+    renderRecordsList();
+  });
+}
+
 sortBy.addEventListener('change', () => {
   state.sortBy = sortBy.value;
   renderRecordsList();
@@ -2420,7 +2587,7 @@ exportCsvBtn.addEventListener('click', () => {
     return;
   }
 
-  const headers = ['ID', 'Survey Number', 'Sub Division', 'Patta Number', 'Document Number', 'Document Owner Name', 'Land Type', 'District', 'SRO', 'Village', 'Patta Transferred', 'Patta Owners', 'Parcels', 'Size Value', 'Size Unit', 'Size in Cent', 'Size in SqFt', 'Size in Acre', 'Size in Are', 'Purchase Date', 'Purchased From', 'Notes', 'Created At'];
+  const headers = ['ID', 'Survey Number', 'Sub Division', 'Patta Number', 'Document Number', 'Document Owner Name', 'Land Type', 'District', 'SRO', 'Village', 'Patta Transferred', 'Patta Owners', 'Parcels', 'Size Value', 'Size Unit', 'Size in Cent', 'Size in SqFt', 'Size in Acre', 'Size in Are', 'Purchase Date', 'Purchased From', 'Notes', 'Created At', 'Last Updated At'];
   
   const csvRows = [headers.join(',')];
 
@@ -2463,7 +2630,8 @@ exportCsvBtn.addEventListener('click', () => {
       r.purchaseDate ? r.purchaseDate.split('T')[0] : '',
       `"${sellersStr.replace(/"/g, '""')}"`,
       `"${(r.notes || '').replace(/"/g, '""')}"`,
-      r.createdAt
+      r.createdAt || '',
+      r.updatedAt || r.createdAt || ''
     ];
     csvRows.push(row.join(','));
   });
@@ -2667,9 +2835,11 @@ const leftNavDrawer = document.getElementById('leftNavDrawer');
 const navMyLandsBtn = document.getElementById('navMyLandsBtn');
 const navDashboardBtn = document.getElementById('navDashboardBtn');
 const navNearbyLandsBtn = document.getElementById('navNearbyLandsBtn');
+const navPendingDealsBtn = document.getElementById('navPendingDealsBtn');
 
 const myLandsView = document.getElementById('myLandsView');
 const nearbyLandsSection = document.getElementById('nearbyLandsSection');
+const pendingDealsSection = document.getElementById('pendingDealsSection');
 
 function openLeftNav() {
   if (leftNavDrawer && leftNavOverlay) {
@@ -2704,9 +2874,11 @@ if (navMyLandsBtn) {
     if (navMyLandsBtn) navMyLandsBtn.classList.add('active');
     if (navPlannedPartitionsBtn) navPlannedPartitionsBtn.classList.remove('active');
     if (navNearbyLandsBtn) navNearbyLandsBtn.classList.remove('active');
+    if (navPendingDealsBtn) navPendingDealsBtn.classList.remove('active');
     if (myLandsView) myLandsView.classList.remove('hidden');
     if (plannedPartitionsSection) plannedPartitionsSection.classList.add('hidden');
     if (nearbyLandsSection) nearbyLandsSection.classList.add('hidden');
+    if (pendingDealsSection) pendingDealsSection.classList.add('hidden');
     closeLeftNav();
     fetchRecords();
   });
@@ -2718,9 +2890,11 @@ if (navPlannedPartitionsBtn) {
     if (navPlannedPartitionsBtn) navPlannedPartitionsBtn.classList.add('active');
     if (navMyLandsBtn) navMyLandsBtn.classList.remove('active');
     if (navNearbyLandsBtn) navNearbyLandsBtn.classList.remove('active');
+    if (navPendingDealsBtn) navPendingDealsBtn.classList.remove('active');
     if (plannedPartitionsSection) plannedPartitionsSection.classList.remove('hidden');
     if (myLandsView) myLandsView.classList.add('hidden');
     if (nearbyLandsSection) nearbyLandsSection.classList.add('hidden');
+    if (pendingDealsSection) pendingDealsSection.classList.add('hidden');
     closeLeftNav();
     await fetchRecords();
     renderTransfereeView();
@@ -2733,11 +2907,29 @@ if (navNearbyLandsBtn) {
     if (navNearbyLandsBtn) navNearbyLandsBtn.classList.add('active');
     if (navMyLandsBtn) navMyLandsBtn.classList.remove('active');
     if (navPlannedPartitionsBtn) navPlannedPartitionsBtn.classList.remove('active');
+    if (navPendingDealsBtn) navPendingDealsBtn.classList.remove('active');
     if (nearbyLandsSection) nearbyLandsSection.classList.remove('hidden');
     if (myLandsView) myLandsView.classList.add('hidden');
     if (plannedPartitionsSection) plannedPartitionsSection.classList.add('hidden');
+    if (pendingDealsSection) pendingDealsSection.classList.add('hidden');
     closeLeftNav();
     fetchNearbyRecords();
+  });
+}
+
+if (navPendingDealsBtn) {
+  navPendingDealsBtn.addEventListener('click', async () => {
+    state.activeView = 'pendingDeals';
+    if (navPendingDealsBtn) navPendingDealsBtn.classList.add('active');
+    if (navMyLandsBtn) navMyLandsBtn.classList.remove('active');
+    if (navPlannedPartitionsBtn) navPlannedPartitionsBtn.classList.remove('active');
+    if (navNearbyLandsBtn) navNearbyLandsBtn.classList.remove('active');
+    if (pendingDealsSection) pendingDealsSection.classList.remove('hidden');
+    if (myLandsView) myLandsView.classList.add('hidden');
+    if (plannedPartitionsSection) plannedPartitionsSection.classList.add('hidden');
+    if (nearbyLandsSection) nearbyLandsSection.classList.add('hidden');
+    closeLeftNav();
+    await fetchPendingDeals();
   });
 }
 
@@ -2768,6 +2960,14 @@ const transfereeViewModeSelect = document.getElementById('transfereeViewMode');
 if (transfereeViewModeSelect) {
   transfereeViewModeSelect.addEventListener('change', (e) => {
     state.transfereeViewMode = e.target.value;
+    renderTransfereeView();
+  });
+}
+
+const transfereeFilterTypeSelect = document.getElementById('transfereeFilterType');
+if (transfereeFilterTypeSelect) {
+  transfereeFilterTypeSelect.addEventListener('change', (e) => {
+    state.transfereeLandTypeFilter = e.target.value;
     renderTransfereeView();
   });
 }
@@ -2805,7 +3005,8 @@ function renderTransfereeView() {
         allPlans.push({
           parentRecordId: record.id,
           parentDocNumber: record.documentNumber,
-          parentSellers: Array.isArray(record.documentOwnerName) ? record.documentOwnerName.join(', ') : '',
+          parentDocOwners: Array.isArray(record.documentOwnerName) ? record.documentOwnerName.join(', ') : (record.documentOwnerName || ''),
+          parentSellers: Array.isArray(record.purchasedFrom) ? record.purchasedFrom.join(', ') : (record.purchasedFrom || ''),
           parentLandSize: record.landSize || { value: 0, unit: 'cent' },
           parentLandType: record.landType || 'dry',
           parentPartitions: Array.isArray(record.partitions) ? record.partitions : [],
@@ -2822,10 +3023,15 @@ function renderTransfereeView() {
     }
   });
 
+  if (state.transfereeLandTypeFilter && state.transfereeLandTypeFilter !== 'all') {
+    allPlans = allPlans.filter(p => (p.landType || 'dry') === state.transfereeLandTypeFilter);
+  }
+
   if (state.transfereeSearchQuery) {
     const q = state.transfereeSearchQuery.toLowerCase();
     allPlans = allPlans.filter(p =>
       p.buyerName.toLowerCase().includes(q) ||
+      p.parentDocOwners.toLowerCase().includes(q) ||
       p.parentSellers.toLowerCase().includes(q) ||
       p.parentDocNumber.toLowerCase().includes(q) ||
       p.targetPattaLabel.toLowerCase().includes(q) ||
@@ -2854,6 +3060,14 @@ function renderTransfereeView() {
     partition: '<span class="status-badge status-transferred" style="background: rgba(59, 130, 246, 0.15); color: #2563eb;">FAMILY PARTITION PLAN</span>',
     gift: '<span class="status-badge status-transferred" style="background: rgba(16, 185, 129, 0.15); color: #059669;">GIFT SETTLEMENT PLAN</span>',
     release: '<span class="status-badge status-transferred" style="background: rgba(139, 92, 246, 0.15); color: #7c3aed;">RELEASE DEED PLAN</span>'
+  };
+
+  const typeLabels = {
+    wet: 'Wet (Nanjai)',
+    dry: 'Dry (Punjai)',
+    residential: 'Resi (Manai)',
+    commercial: 'Commercial',
+    well: 'Well (Kenaru)'
   };
 
   // Build groupsMap for both grouped and summary views
@@ -2886,15 +3100,28 @@ function renderTransfereeView() {
 
       const totalSizeDisplay = formatTransfereeTotalArea(totalCents);
 
-      const itemsHtml = plansList.map(plan => `
+      const itemsHtml = plansList.map(plan => {
+        const itemCents = convertUnits(plan.size.value, plan.size.unit).cents;
+        const isSelected = !!state.selectedItemCentsMap['part_' + plan.planId];
+        const ltLabel = typeLabels[plan.landType || 'dry'] || 'Dry (Punjai)';
+
+        return `
         <div style="background: var(--bg-card); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px;">
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-            ${typeBadges[plan.type] || typeBadges.sale}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label class="card-select-label" onclick="event.stopPropagation();" title="Select for sum calculation">
+                <input type="checkbox" class="partition-select-checkbox" data-key="part_${plan.planId}" data-cents="${itemCents}" ${isSelected ? 'checked' : ''} onchange="handleLandCheckboxChange(this)">
+                <span class="checkbox-custom"></span>
+              </label>
+              ${typeBadges[plan.type] || typeBadges.sale}
+              <span class="type-tag ${plan.landType || 'dry'}" style="font-size: 0.68rem; padding: 2px 6px;">${ltLabel}</span>
+            </div>
             <span style="font-size: 1rem; font-weight: 700; color: var(--primary);">${plan.size.value} ${plan.size.unit}</span>
           </div>
 
           <div style="font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;">
-            <div><span style="color: var(--text-muted);">From Seller:</span> <strong>${escapeHtml(plan.parentSellers || 'Primary Owner')}</strong></div>
+            <div><span style="color: var(--text-muted);">Current Owner:</span> <strong>${escapeHtml(plan.parentDocOwners || 'N/A')}</strong></div>
+            <div><span style="color: var(--text-muted);">Previous Owner (Seller):</span> <strong>${escapeHtml(plan.parentSellers || 'Primary Owner')}</strong></div>
             <div><span style="color: var(--text-muted);">Parent Doc:</span> <strong>Doc #${escapeHtml(plan.parentDocNumber)}</strong></div>
             <div><span style="color: var(--text-muted);">Target Parcel:</span> <strong>${escapeHtml(plan.targetPattaLabel)}</strong></div>
             ${plan.notes ? `<div style="font-style: italic; color: var(--text-secondary); margin-top: 2px;">"${escapeHtml(plan.notes)}"</div>` : ''}
@@ -2906,7 +3133,8 @@ function renderTransfereeView() {
             </button>
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
 
       return `
         <div class="record-card" style="border-left: 5px solid var(--primary); display: flex; flex-direction: column; justify-content: space-between;">
@@ -2946,8 +3174,9 @@ function renderTransfereeView() {
   transfereeCountTitle.innerText = `Planned Partitions & Transferees (${allPlans.length})`;
   transfereeRecordsContainer.className = 'records-container';
   transfereeRecordsContainer.innerHTML = allPlans.map(plan => {
-    const typeLabels = { wet: 'Wet (Nanjai)', dry: 'Dry (Punjai)', residential: 'Residential (Manai)', commercial: 'Commercial', well: 'Well (Kenaru)' };
     const ltLabel = typeLabels[plan.landType || 'dry'] || 'Dry (Punjai)';
+    const itemCents = convertUnits(plan.size.value, plan.size.unit).cents;
+    const isSelected = !!state.selectedItemCentsMap['part_' + plan.planId];
 
     // Calculate balance for this record
     const parentTotalCents = convertUnits(plan.parentLandSize.value, plan.parentLandSize.unit).cents;
@@ -2962,21 +3191,31 @@ function renderTransfereeView() {
     const balanceDisplay = formatTransfereeTotalArea(Math.max(0, balanceCents));
 
     return `
-      <div class="record-card" style="border-left: 4px solid var(--primary);">
+      <div class="record-card ${isSelected ? 'selected-card' : ''}" style="border-left: 4px solid var(--primary);">
         <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-          <div>
-            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Transferee / Buyer</div>
-            <h3 style="font-size: 1.2rem; font-family: var(--font-heading); color: var(--text-primary); margin: 2px 0 0 0;">${escapeHtml(plan.buyerName)}</h3>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <label class="card-select-label" onclick="event.stopPropagation();" title="Select for sum calculation">
+              <input type="checkbox" class="partition-select-checkbox" data-key="part_${plan.planId}" data-cents="${itemCents}" ${isSelected ? 'checked' : ''} onchange="handleLandCheckboxChange(this)">
+              <span class="checkbox-custom"></span>
+            </label>
+            <div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Transferee / Buyer</div>
+              <h3 style="font-size: 1.2rem; font-family: var(--font-heading); color: var(--text-primary); margin: 2px 0 0 0;">${escapeHtml(plan.buyerName)}</h3>
+            </div>
           </div>
           <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
             ${typeBadges[plan.type] || typeBadges.sale}
-            <span style="background: rgba(99,102,241,0.1); color: var(--primary); border-radius: 4px; padding: 2px 8px; font-size: 0.68rem; font-weight: 600;">${ltLabel}</span>
+            <span class="type-tag ${plan.landType || 'dry'}" style="font-size: 0.68rem; padding: 2px 8px; font-weight: 600;">${ltLabel}</span>
           </div>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.88rem; background: var(--bg-card); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 12px;">
           <div>
-            <span style="color: var(--text-muted);">Acquiring From Seller:</span>
+            <span style="color: var(--text-muted);">Current Owner:</span>
+            <strong>${escapeHtml(plan.parentDocOwners || 'N/A')}</strong>
+          </div>
+          <div>
+            <span style="color: var(--text-muted);">Previous Owner (Seller):</span>
             <strong>${escapeHtml(plan.parentSellers || 'Primary Owner')}</strong>
           </div>
           <div>
@@ -3013,14 +3252,20 @@ function renderTransfereeView() {
     `;
   }).join('');
   return;
-
-  // ─── Summary Names View (reached if viewMode === 'summary') ───
 }
 
 function renderSummaryView(groupsMap, typeBadges) {
   const groupKeys = Object.keys(groupsMap).sort((a, b) => a.localeCompare(b));
   const transfereeCountTitle = document.getElementById('transfereeCountTitle');
   const transfereeRecordsContainer = document.getElementById('transfereeRecordsContainer');
+
+  const typeLabels = {
+    wet: 'Wet (Nanjai)',
+    dry: 'Dry (Punjai)',
+    residential: 'Resi (Manai)',
+    commercial: 'Commercial',
+    well: 'Well (Kenaru)'
+  };
 
   if (transfereeCountTitle) {
     transfereeCountTitle.innerText = `Planned Partitions & Transferees (${groupKeys.length} Transferee${groupKeys.length === 1 ? '' : 's'})`;
@@ -3039,14 +3284,29 @@ function renderSummaryView(groupsMap, typeBadges) {
           totalCents += conv.cents;
         });
 
-        const rowsHtml = plansList.map((plan, ri) => `
-          <tr>
+        const rowsHtml = plansList.map((plan, ri) => {
+          const itemCents = convertUnits(plan.size.value, plan.size.unit).cents;
+          const isSelected = !!state.selectedItemCentsMap['part_' + plan.planId];
+          const ltLabel = typeLabels[plan.landType || 'dry'] || 'Dry';
+
+          return `
+          <tr class="${isSelected ? 'selected-card' : ''}">
+            <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">
+              <label class="card-select-label" onclick="event.stopPropagation();" title="Select for sum calculation">
+                <input type="checkbox" class="partition-select-checkbox" data-key="part_${plan.planId}" data-cents="${itemCents}" ${isSelected ? 'checked' : ''} onchange="handleLandCheckboxChange(this)">
+                <span class="checkbox-custom"></span>
+              </label>
+            </td>
             <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">${ri + 1}</td>
             <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">
               ${typeBadges[plan.type] || typeBadges.sale}
             </td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">
+              <span class="type-tag ${plan.landType || 'dry'}" style="font-size: 0.7rem; padding: 2px 6px;">${ltLabel}</span>
+            </td>
             <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">${escapeHtml(plan.targetPattaLabel)}</td>
             <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">Doc #${escapeHtml(plan.parentDocNumber)}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">${escapeHtml(plan.parentDocOwners || 'N/A')}</td>
             <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color);">${escapeHtml(plan.parentSellers || 'Primary Owner')}</td>
             <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color); font-weight: 700; color: var(--primary);">${plan.size.value} ${plan.size.unit}</td>
             <td style="padding: 8px 12px; border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.8rem;">${plan.notes ? escapeHtml(plan.notes) : '—'}</td>
@@ -3054,7 +3314,8 @@ function renderSummaryView(groupsMap, typeBadges) {
               <button type="button" class="btn btn-secondary btn-sm" onclick="removePartitionPlan('${plan.parentRecordId}', '${plan.planId}')" style="color: var(--danger); padding: 2px 8px; font-size: 0.72rem;">Remove</button>
             </td>
           </tr>
-        `).join('');
+        `;
+        }).join('');
 
         const totalDisplay = formatTransfereeTotalArea(totalCents);
 
@@ -3082,11 +3343,14 @@ function renderSummaryView(groupsMap, typeBadges) {
               <table style="width: 100%; border-collapse: collapse; font-size: 0.83rem;">
                 <thead>
                   <tr style="background: var(--bg-hover);">
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Select</th>
                     <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">#</th>
                     <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Type</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Land Type</th>
                     <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Target Parcel</th>
                     <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Parent Doc</th>
-                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Seller</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Current Owner</th>
+                    <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Previous Owner (Seller)</th>
                     <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Size</th>
                     <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Notes</th>
                     <th style="padding: 8px 12px; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase;">Action</th>
@@ -3095,7 +3359,7 @@ function renderSummaryView(groupsMap, typeBadges) {
                 <tbody>
                   ${rowsHtml}
                   <tr style="background: var(--bg-hover);">
-                    <td colspan="5" style="padding: 10px 12px; font-weight: 700; text-align: right; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase;">Total Acquired Area →</td>
+                    <td colspan="8" style="padding: 10px 12px; font-weight: 700; text-align: right; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase;">Total Acquired Area →</td>
                     <td colspan="3" style="padding: 10px 12px; font-weight: 800; color: var(--primary); font-size: 0.95rem;">${totalDisplay}</td>
                   </tr>
                 </tbody>
@@ -3104,7 +3368,6 @@ function renderSummaryView(groupsMap, typeBadges) {
           </div>
         `;
       }).join('')}
-    </div>
   `;
 }
 
@@ -3658,3 +3921,616 @@ window.addEventListener('DOMContentLoaded', () => {
   fetchRecords();
   initAttachmentsHandlers();
 });
+
+// -------------------------------------------------------------
+// Unregistered Land Purchases & Deals Pending Registration Module
+// -------------------------------------------------------------
+const pendingDealsCountTitle = document.getElementById('pendingDealsCountTitle');
+const statPendingDealsCount = document.getElementById('statPendingDealsCount');
+const statPendingDealsSize = document.getElementById('statPendingDealsSize');
+const statPendingDealsAdvance = document.getElementById('statPendingDealsAdvance');
+
+const addPendingDealBtn = document.getElementById('addPendingDealBtn');
+const pendingDealSearchInput = document.getElementById('pendingDealSearchInput');
+const clearPendingDealSearchBtn = document.getElementById('clearPendingDealSearchBtn');
+const pendingDealFilterStatus = document.getElementById('pendingDealFilterStatus');
+const pendingDealsContainer = document.getElementById('pendingDealsContainer');
+
+const pendingDealOverlay = document.getElementById('pendingDealOverlay');
+const pendingDealDrawer = document.getElementById('pendingDealDrawer');
+const pendingDealCloseBtn = document.getElementById('pendingDealCloseBtn');
+const pendingDealCancelBtn = document.getElementById('pendingDealCancelBtn');
+const deletePendingDealBtn = document.getElementById('deletePendingDealBtn');
+const pendingDealForm = document.getElementById('pendingDealForm');
+const pendingSellersContainer = document.getElementById('pendingSellersContainer');
+const addPendingSellerBtn = document.getElementById('addPendingSellerBtn');
+const pendingBuyersContainer = document.getElementById('pendingBuyersContainer');
+const addPendingBuyerBtn = document.getElementById('addPendingBuyerBtn');
+
+const areaPendingAgreement = document.getElementById('areaPendingAgreement');
+const filePendingAgreement = document.getElementById('filePendingAgreement');
+const statusPendingAgreement = document.getElementById('statusPendingAgreement');
+const namePendingAgreement = document.getElementById('namePendingAgreement');
+const viewPendingAgreement = document.getElementById('viewPendingAgreement');
+const deletePendingAgreementBtn = document.getElementById('deletePendingAgreementBtn');
+
+let tempPendingAgreement = null;
+
+function addPendingSellerInput(initialVal = '') {
+  if (!pendingSellersContainer) return;
+  const div = document.createElement('div');
+  div.className = 'name-row';
+  div.innerHTML = `
+    <input type="text" class="pending-seller-name-input" value="${escapeHtml(initialVal)}" placeholder="e.g. M. Shanmugam" style="flex: 1;">
+    <button type="button" class="remove-name-btn" aria-label="Remove">&times;</button>
+  `;
+  div.querySelector('.remove-name-btn').addEventListener('click', () => {
+    if (pendingSellersContainer.children.length > 1) {
+      div.remove();
+    } else {
+      div.querySelector('input').value = '';
+    }
+  });
+  pendingSellersContainer.appendChild(div);
+}
+
+function addPendingBuyerInput(initialVal = '') {
+  if (!pendingBuyersContainer) return;
+  const div = document.createElement('div');
+  div.className = 'name-row';
+  div.innerHTML = `
+    <input type="text" class="pending-buyer-name-input" value="${escapeHtml(initialVal)}" placeholder="e.g. Manoj Kumar" style="flex: 1;">
+    <button type="button" class="remove-name-btn" aria-label="Remove">&times;</button>
+  `;
+  div.querySelector('.remove-name-btn').addEventListener('click', () => {
+    if (pendingBuyersContainer.children.length > 1) {
+      div.remove();
+    } else {
+      div.querySelector('input').value = '';
+    }
+  });
+  pendingBuyersContainer.appendChild(div);
+}
+
+if (addPendingSellerBtn) addPendingSellerBtn.addEventListener('click', () => addPendingSellerInput(''));
+if (addPendingBuyerBtn) addPendingBuyerBtn.addEventListener('click', () => addPendingBuyerInput(''));
+
+function openPendingDealDrawer(deal = null) {
+  if (!pendingDealDrawer || !pendingDealOverlay) return;
+
+  document.getElementById('pendingDealId').value = deal ? deal.id : '';
+  document.getElementById('pendingDealDrawerTitle').innerText = deal ? 'Edit Unregistered Purchase Deal' : 'Add Unregistered Purchase Deal';
+
+  document.getElementById('dealStatus').value = deal ? (deal.dealStatus || 'agreement_executed') : 'agreement_executed';
+  document.getElementById('pendingDealLandType').value = deal ? (deal.landType || 'dry') : 'dry';
+  document.getElementById('pendingSurveyNumber').value = deal ? deal.surveyNumber : '';
+  document.getElementById('pendingSubDivision').value = deal ? (deal.subDivision || '') : '';
+  document.getElementById('pendingPattaNumber').value = deal ? (deal.pattaNumber || '') : '';
+  document.getElementById('pendingSizeValue').value = deal && deal.landSize ? deal.landSize.value : '';
+  document.getElementById('pendingSizeUnit').value = deal && deal.landSize ? deal.landSize.unit : 'cent';
+  document.getElementById('agreementDate').value = deal ? (deal.agreementDate || '') : '';
+  document.getElementById('targetRegistrationDate').value = deal ? (deal.targetRegistrationDate || '') : '';
+  document.getElementById('totalPrice').value = deal && deal.totalPrice ? deal.totalPrice : '';
+  document.getElementById('advancePaid').value = deal && deal.advancePaid ? deal.advancePaid : '';
+  document.getElementById('pendingDistrict').value = deal ? (deal.district || '') : '';
+  document.getElementById('pendingSro').value = deal ? (deal.sro || '') : '';
+  document.getElementById('pendingVillage').value = deal ? (deal.village || '') : '';
+  document.getElementById('pendingNotes').value = deal ? (deal.notes || '') : '';
+
+  if (pendingSellersContainer) {
+    pendingSellersContainer.innerHTML = '';
+    const sellers = deal && Array.isArray(deal.sellerName) && deal.sellerName.length > 0 ? deal.sellerName : [''];
+    sellers.forEach(s => addPendingSellerInput(s));
+  }
+
+  if (pendingBuyersContainer) {
+    pendingBuyersContainer.innerHTML = '';
+    const buyers = deal && Array.isArray(deal.buyerName) && deal.buyerName.length > 0 ? deal.buyerName : [state.currentUser ? (state.currentUser.email.split('@')[0]) : ''];
+    buyers.forEach(b => addPendingBuyerInput(b));
+  }
+
+  tempPendingAgreement = deal && deal.attachments ? deal.attachments.agreement : null;
+  updatePendingAgreementUI(tempPendingAgreement);
+
+  if (deletePendingDealBtn) {
+    if (deal) deletePendingDealBtn.classList.remove('hidden');
+    else deletePendingDealBtn.classList.add('hidden');
+  }
+
+  pendingDealDrawer.classList.add('active');
+  pendingDealOverlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closePendingDealDrawer() {
+  if (!pendingDealDrawer || !pendingDealOverlay) return;
+  pendingDealDrawer.classList.remove('active');
+  pendingDealOverlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+if (addPendingDealBtn) addPendingDealBtn.addEventListener('click', () => openPendingDealDrawer());
+if (pendingDealCloseBtn) pendingDealCloseBtn.addEventListener('click', closePendingDealDrawer);
+if (pendingDealCancelBtn) pendingDealCancelBtn.addEventListener('click', closePendingDealDrawer);
+if (pendingDealOverlay) pendingDealOverlay.addEventListener('click', closePendingDealDrawer);
+
+function updatePendingAgreementUI(attObj) {
+  if (attObj && isValidFileUrl(attObj.fileUrl)) {
+    if (statusPendingAgreement) statusPendingAgreement.classList.remove('hidden');
+    if (areaPendingAgreement) areaPendingAgreement.classList.add('hidden');
+    if (namePendingAgreement) namePendingAgreement.innerText = attObj.fileName || 'Agreement Copy';
+    if (viewPendingAgreement) viewPendingAgreement.href = attObj.fileUrl;
+  } else {
+    if (statusPendingAgreement) statusPendingAgreement.classList.add('hidden');
+    if (areaPendingAgreement) areaPendingAgreement.classList.remove('hidden');
+    if (namePendingAgreement) namePendingAgreement.innerText = '';
+    if (viewPendingAgreement) viewPendingAgreement.href = '#';
+  }
+}
+
+if (areaPendingAgreement && filePendingAgreement) {
+  areaPendingAgreement.addEventListener('click', () => filePendingAgreement.click());
+  filePendingAgreement.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      tempPendingAgreement = { fileName: file.name, fileObj: file, fileUrl: URL.createObjectURL(file) };
+      updatePendingAgreementUI(tempPendingAgreement);
+    }
+  });
+}
+
+if (deletePendingAgreementBtn) {
+  deletePendingAgreementBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    tempPendingAgreement = null;
+    if (filePendingAgreement) filePendingAgreement.value = '';
+    updatePendingAgreementUI(null);
+  });
+}
+
+if (pendingDealSearchInput) {
+  pendingDealSearchInput.addEventListener('input', (e) => {
+    state.pendingDealsSearchQuery = e.target.value;
+    if (clearPendingDealSearchBtn) {
+      if (state.pendingDealsSearchQuery) clearPendingDealSearchBtn.classList.remove('hidden');
+      else clearPendingDealSearchBtn.classList.add('hidden');
+    }
+    renderPendingDealsView();
+  });
+}
+
+if (clearPendingDealSearchBtn) {
+  clearPendingDealSearchBtn.addEventListener('click', () => {
+    state.pendingDealsSearchQuery = '';
+    if (pendingDealSearchInput) pendingDealSearchInput.value = '';
+    clearPendingDealSearchBtn.classList.add('hidden');
+    renderPendingDealsView();
+  });
+}
+
+if (pendingDealFilterStatus) {
+  pendingDealFilterStatus.addEventListener('change', (e) => {
+    state.pendingDealsStatusFilter = e.target.value;
+    renderPendingDealsView();
+  });
+}
+
+async function fetchPendingDeals() {
+  if (!state.currentUser) {
+    state.pendingDeals = [];
+    renderPendingDealsView();
+    return;
+  }
+
+  if (state.supabaseClient) {
+    try {
+      const { data, error } = await state.supabaseClient
+        .from('pending_land_deals')
+        .select('*')
+        .eq('user_email', state.currentUser.email)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      state.pendingDeals = (data || []).map(d => ({
+        id: d.id,
+        sellerName: typeof d.seller_name === 'string' ? JSON.parse(d.seller_name) : (d.seller_name || []),
+        buyerName: typeof d.buyer_name === 'string' ? JSON.parse(d.buyer_name) : (d.buyer_name || []),
+        surveyNumber: d.survey_number,
+        subDivision: d.sub_division || '',
+        pattaNumber: d.patta_number || '',
+        landType: d.land_type || 'dry',
+        landSize: typeof d.land_size === 'string' ? JSON.parse(d.land_size) : (d.land_size || { value: 0, unit: 'cent' }),
+        dealStatus: d.deal_status || 'agreement_executed',
+        agreementDate: d.agreement_date,
+        targetRegistrationDate: d.target_registration_date,
+        totalPrice: parseFloat(d.total_price) || 0,
+        advancePaid: parseFloat(d.advance_paid) || 0,
+        district: d.district || '',
+        sro: d.sro || '',
+        village: d.village || '',
+        notes: d.notes || '',
+        attachments: typeof d.attachments === 'string' ? JSON.parse(d.attachments) : (d.attachments || {}),
+        createdAt: d.created_at,
+        updatedAt: d.updated_at
+      }));
+
+      renderPendingDealsView();
+      return;
+    } catch (err) {
+      console.error('Error fetching pending deals from Supabase:', err);
+    }
+  }
+
+  // Fallback API
+  try {
+    const res = await fetch('/api/pending-deals');
+    if (res.ok) {
+      state.pendingDeals = await res.json();
+    }
+  } catch (e) {
+    state.pendingDeals = [];
+  }
+  renderPendingDealsView();
+}
+
+function convertPendingDealToRecord(deal) {
+  if (!deal) return;
+  if (!confirm(`Do you want to convert the deal for Survey ${deal.surveyNumber} into an official registered Land Record?`)) return;
+
+  // Open main form drawer with pre-filled details
+  openDrawer();
+
+  document.getElementById('surveyNumber').value = deal.surveyNumber || '';
+  document.getElementById('subDivision').value = deal.subDivision || '';
+  document.getElementById('landType').value = deal.landType || 'dry';
+  document.getElementById('district').value = deal.district || '';
+  document.getElementById('sro').value = deal.sro || '';
+  document.getElementById('village').value = deal.village || '';
+  document.getElementById('notes').value = `Converted from Pending Purchase Deal (Total Price: ₹${(deal.totalPrice || 0).toLocaleString()}, Advance Paid: ₹${(deal.advancePaid || 0).toLocaleString()}). ${deal.notes || ''}`;
+
+  // Pre-fill Document Owner Names (buyers) & Sellers
+  resetDocumentInputs(
+    Array.isArray(deal.buyerName) ? deal.buyerName : [deal.buyerName],
+    Array.isArray(deal.sellerName) ? deal.sellerName : [deal.sellerName]
+  );
+
+  // Pre-fill Patta block with deal size
+  if (pattasContainer) {
+    pattasContainer.innerHTML = '';
+    addPattaInputBlock(
+      deal.pattaNumber || '',
+      true, // Patta transferred
+      Array.isArray(deal.buyerName) ? deal.buyerName : [],
+      [{
+        surveyNumber: deal.surveyNumber || '',
+        subDivision: deal.subDivision || '',
+        landSize: deal.landSize || { value: 0, unit: 'cent' },
+        landType: deal.landType || 'dry'
+      }]
+    );
+  }
+
+  showToast('Form pre-filled from Pending Deal! Add document number and date, then click Save.', 'info');
+}
+
+function renderPendingDealsView() {
+  if (!pendingDealsContainer) return;
+
+  if (!state.currentUser) {
+    if (pendingDealsCountTitle) pendingDealsCountTitle.innerText = `Deals Made & Purchases Pending Registration (0)`;
+    if (statPendingDealsCount) statPendingDealsCount.innerText = '0';
+    if (statPendingDealsSize) statPendingDealsSize.innerText = '0.00 Cent';
+    if (statPendingDealsAdvance) statPendingDealsAdvance.innerText = '₹0';
+    pendingDealsContainer.className = 'records-container empty-state';
+    pendingDealsContainer.innerHTML = `
+      <div class="empty-state-message">
+        <div class="empty-illustration">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <h3>Authentication Required</h3>
+        <p>Please Sign In to view and track your unregistered land purchase deals.</p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openAuthModal()" style="margin-top: 12px; height: 36px; padding: 0 16px;">
+          Sign In Now
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  let filtered = [...state.pendingDeals];
+
+  if (state.pendingDealsStatusFilter && state.pendingDealsStatusFilter !== 'all') {
+    filtered = filtered.filter(d => (d.dealStatus || 'agreement_executed') === state.pendingDealsStatusFilter);
+  }
+
+  if (state.pendingDealsSearchQuery) {
+    const q = state.pendingDealsSearchQuery.toLowerCase();
+    filtered = filtered.filter(d => {
+      const sellersStr = (Array.isArray(d.sellerName) ? d.sellerName.join(' ') : (d.sellerName || '')).toLowerCase();
+      const buyersStr = (Array.isArray(d.buyerName) ? d.buyerName.join(' ') : (d.buyerName || '')).toLowerCase();
+      const surveyStr = (d.surveyNumber || '').toLowerCase();
+      const villageStr = (d.village || '').toLowerCase();
+      const notesStr = (d.notes || '').toLowerCase();
+      return sellersStr.includes(q) || buyersStr.includes(q) || surveyStr.includes(q) || villageStr.includes(q) || notesStr.includes(q);
+    });
+  }
+
+  // Dashboard Stats
+  let totalCents = 0;
+  let totalAdvance = 0;
+  filtered.forEach(d => {
+    if (d.landSize && d.landSize.value) {
+      totalCents += convertUnits(d.landSize.value, d.landSize.unit).cents;
+    }
+    totalAdvance += (d.advancePaid || 0);
+  });
+
+  if (pendingDealsCountTitle) pendingDealsCountTitle.innerText = `Deals Made & Purchases Pending Registration (${filtered.length})`;
+  if (statPendingDealsCount) statPendingDealsCount.innerText = filtered.length;
+  if (statPendingDealsSize) statPendingDealsSize.innerText = formatSizeDisplay(totalCents, 'cent');
+  if (statPendingDealsAdvance) statPendingDealsAdvance.innerText = `₹${totalAdvance.toLocaleString('en-IN')}`;
+
+  if (filtered.length === 0) {
+    pendingDealsContainer.className = 'records-container empty-state';
+    pendingDealsContainer.innerHTML = `
+      <div class="empty-state-message">
+        <div class="empty-illustration">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg>
+        </div>
+        <h3>No Unregistered Land Deals Found</h3>
+        <p>You can add deals made for purchasing land before official deed registration using the <strong>"+ Add Unregistered Purchase Deal"</strong> button.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const statusBadges = {
+    advance_paid: '<span class="status-badge status-pending" style="background: rgba(245, 158, 11, 0.15); color: #d97706;">ADVANCE TOKEN PAID</span>',
+    agreement_executed: '<span class="status-badge status-transferred" style="background: rgba(59, 130, 246, 0.15); color: #2563eb;">SALE AGREEMENT EXECUTED</span>',
+    pending_registration: '<span class="status-badge status-transferred" style="background: rgba(139, 92, 246, 0.15); color: #7c3aed;">REGISTRATION PENDING</span>',
+    scheduled: '<span class="status-badge status-transferred" style="background: rgba(16, 185, 129, 0.15); color: #059669;">REGISTRATION SCHEDULED</span>'
+  };
+
+  const typeLabels = { wet: 'Wet (Nanjai)', dry: 'Dry (Punjai)', residential: 'Resi (Manai)', commercial: 'Commercial', well: 'Well (Kenaru)' };
+
+  pendingDealsContainer.className = 'records-container';
+  pendingDealsContainer.innerHTML = filtered.map(deal => {
+    const sellersText = Array.isArray(deal.sellerName) ? deal.sellerName.join(', ') : (deal.sellerName || 'N/A');
+    const buyersText = Array.isArray(deal.buyerName) ? deal.buyerName.join(', ') : (deal.buyerName || 'N/A');
+    const sizeVal = deal.landSize ? deal.landSize.value : 0;
+    const sizeUnit = deal.landSize ? deal.landSize.unit : 'cent';
+    const sizeCents = convertUnits(sizeVal, sizeUnit).cents;
+    const sizeDisplay = formatSizeDisplay(sizeCents, 'cent');
+    const ltLabel = typeLabels[deal.landType || 'dry'] || 'Dry';
+    const hasAgreement = deal.attachments && deal.attachments.agreement && isValidFileUrl(deal.attachments.agreement.fileUrl);
+
+    return `
+      <div class="record-card" style="border-left: 5px solid #d97706;">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Survey No / Subdivision</div>
+            <h3 style="font-size: 1.2rem; font-family: var(--font-heading); color: var(--text-primary); margin: 2px 0 0 0;">
+              Survey ${escapeHtml(deal.surveyNumber)}${deal.subDivision ? '/' + escapeHtml(deal.subDivision) : ''}
+            </h3>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+            ${statusBadges[deal.dealStatus] || statusBadges.agreement_executed}
+            <span class="type-tag ${deal.landType || 'dry'}" style="font-size: 0.68rem; padding: 2px 6px;">${ltLabel}</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.88rem; background: var(--bg-card); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 12px;">
+          <div>
+            <span style="color: var(--text-muted);">Seller / Vendor:</span>
+            <strong>${escapeHtml(sellersText)}</strong>
+          </div>
+          <div>
+            <span style="color: var(--text-muted);">Purchaser / Buyer:</span>
+            <strong>${escapeHtml(buyersText)}</strong>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed var(--border-color); padding-top: 6px; margin-top: 2px;">
+            <span style="color: var(--text-muted);">Agreed Land Size:</span>
+            <strong style="font-size: 1rem; color: var(--primary);">${sizeDisplay}</strong>
+          </div>
+          ${deal.totalPrice || deal.advancePaid ? `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: var(--radius-xs); padding: 6px 10px; margin-top: 2px;">
+              <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">PRICE & ADVANCE:</span>
+              <span style="font-weight: 800; font-size: 0.88rem; color: #d97706;">
+                ₹${(deal.advancePaid || 0).toLocaleString('en-IN')} Paid ${deal.totalPrice ? `/ ₹${deal.totalPrice.toLocaleString('en-IN')} Total` : ''}
+              </span>
+            </div>
+          ` : ''}
+          ${deal.agreementDate || deal.targetRegistrationDate ? `
+            <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; gap: 12px; flex-wrap: wrap; margin-top: 2px;">
+              ${deal.agreementDate ? `<span>Agreement: <strong>${new Date(deal.agreementDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong></span>` : ''}
+              ${deal.targetRegistrationDate ? `<span>Target Registry: <strong>${new Date(deal.targetRegistrationDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong></span>` : ''}
+            </div>
+          ` : ''}
+        </div>
+
+        ${hasAgreement ? `
+          <div style="margin-bottom: 12px;">
+            <a href="${deal.attachments.agreement.fileUrl}" target="_blank" class="attachment-chip" onclick="event.stopPropagation();" title="${deal.attachments.agreement.fileName || 'View Agreement Copy'}">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Sale Agreement / Token Copy
+            </a>
+          </div>
+        ` : ''}
+
+        ${deal.notes ? `
+          <div style="font-size: 0.82rem; color: var(--text-secondary); font-style: italic; margin-bottom: 12px; background: rgba(0,0,0,0.1); padding: 8px 10px; border-radius: var(--radius-xs);">
+            "${escapeHtml(deal.notes)}"
+          </div>
+        ` : ''}
+
+        <div class="card-footer" style="display: flex; justify-content: space-between; align-items: center; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+          <button type="button" class="btn btn-outline-dashed btn-sm" onclick='convertPendingDealToRecord(${JSON.stringify(deal).replace(/'/g, "&apos;")})' style="color: var(--primary); font-weight: 600; font-size: 0.75rem;">
+            Convert to Registered Record →
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick='openPendingDealDrawer(${JSON.stringify(deal).replace(/'/g, "&apos;")})' style="font-size: 0.75rem;">
+            Edit Deal
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+if (pendingDealForm) {
+  pendingDealForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id = document.getElementById('pendingDealId').value;
+    const dealStatus = document.getElementById('dealStatus').value;
+    const landType = document.getElementById('pendingDealLandType').value;
+    const surveyNumber = document.getElementById('pendingSurveyNumber').value.trim();
+    const subDivision = document.getElementById('pendingSubDivision').value.trim();
+    const pattaNumber = document.getElementById('pendingPattaNumber').value.trim();
+    const sizeVal = parseFloat(document.getElementById('pendingSizeValue').value);
+    const sizeUnit = document.getElementById('pendingSizeUnit').value;
+    const agreementDate = document.getElementById('agreementDate').value;
+    const targetRegistrationDate = document.getElementById('targetRegistrationDate').value;
+    const totalPrice = parseFloat(document.getElementById('totalPrice').value) || 0;
+    const advancePaid = parseFloat(document.getElementById('advancePaid').value) || 0;
+    const district = document.getElementById('pendingDistrict').value.trim();
+    const sro = document.getElementById('pendingSro').value.trim();
+    const village = document.getElementById('pendingVillage').value.trim();
+    const notes = document.getElementById('pendingNotes').value.trim();
+
+    const sellerName = [];
+    pendingSellersContainer.querySelectorAll('.pending-seller-name-input').forEach(i => {
+      if (i.value.trim()) sellerName.push(i.value.trim());
+    });
+
+    const buyerName = [];
+    pendingBuyersContainer.querySelectorAll('.pending-buyer-name-input').forEach(i => {
+      if (i.value.trim()) buyerName.push(i.value.trim());
+    });
+
+    if (sellerName.length === 0 || buyerName.length === 0 || !surveyNumber || isNaN(sizeVal) || sizeVal <= 0) {
+      showToast('Please fill all required fields: Seller, Buyer, Survey Number, and Land Size.', 'error');
+      return;
+    }
+
+    let agreementAttachment = tempPendingAgreement;
+    if (state.supabaseClient && tempPendingAgreement && tempPendingAgreement.fileObj) {
+      const uploaded = await uploadFileToSupabase({
+        name: tempPendingAgreement.fileName,
+        base64: tempPendingAgreement.fileUrl
+      }, `agreement_${surveyNumber}`);
+      if (uploaded) agreementAttachment = uploaded;
+    }
+
+    const payload = {
+      seller_name: sellerName,
+      buyer_name: buyerName,
+      survey_number: surveyNumber,
+      sub_division: subDivision,
+      patta_number: pattaNumber,
+      land_type: landType,
+      land_size: { value: sizeVal, unit: sizeUnit },
+      deal_status: dealStatus,
+      agreement_date: agreementDate || null,
+      target_registration_date: targetRegistrationDate || null,
+      total_price: totalPrice,
+      advance_paid: advancePaid,
+      district,
+      sro,
+      village,
+      notes,
+      attachments: { agreement: agreementAttachment },
+      updated_at: new Date().toISOString()
+    };
+
+    if (state.supabaseClient && state.currentUser) {
+      try {
+        payload.user_email = state.currentUser.email;
+
+        if (id) {
+          const { error } = await state.supabaseClient
+            .from('pending_land_deals')
+            .update(payload)
+            .eq('id', id);
+
+          if (error) throw error;
+          showToast('Pending land deal updated successfully!', 'success');
+        } else {
+          payload.created_at = new Date().toISOString();
+          const { error } = await state.supabaseClient
+            .from('pending_land_deals')
+            .insert([payload]);
+
+          if (error) throw error;
+          showToast('Unregistered land purchase deal saved to Supabase!', 'success');
+        }
+
+        closePendingDealDrawer();
+        await fetchPendingDeals();
+        return;
+      } catch (err) {
+        console.error('Error saving pending deal to Supabase:', err);
+      }
+    }
+
+    // Express API fallback
+    try {
+      const url = id ? `/api/pending-deals/${id}` : '/api/pending-deals';
+      const method = id ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sellerName, buyerName, surveyNumber, subDivision, pattaNumber, landType,
+          landSize: { value: sizeVal, unit: sizeUnit }, dealStatus, agreementDate,
+          targetRegistrationDate, totalPrice, advancePaid, district, sro, village, notes,
+          attachments: { agreement: agreementAttachment }
+        })
+      });
+
+      if (!res.ok) throw new Error('API save failed');
+      showToast(id ? 'Deal updated successfully!' : 'Unregistered deal saved successfully!', 'success');
+      closePendingDealDrawer();
+      await fetchPendingDeals();
+    } catch (e) {
+      console.error('Error saving deal via API:', e);
+      showToast('Failed to save deal.', 'error');
+    }
+  });
+}
+
+if (deletePendingDealBtn) {
+  deletePendingDealBtn.addEventListener('click', async () => {
+    const id = document.getElementById('pendingDealId').value;
+    if (!id) return;
+
+    if (!confirm('Are you sure you want to delete this unregistered purchase deal?')) return;
+
+    if (state.supabaseClient && state.currentUser) {
+      try {
+        const { error } = await state.supabaseClient
+          .from('pending_land_deals')
+          .update({ is_deleted: true, updated_at: new Date().toISOString() })
+          .eq('id', id);
+
+        if (error) throw error;
+        showToast('Pending deal deleted.', 'success');
+        closePendingDealDrawer();
+        await fetchPendingDeals();
+        return;
+      } catch (err) {
+        console.error('Error deleting pending deal:', err);
+      }
+    }
+
+    try {
+      await fetch(`/api/pending-deals/${id}`, { method: 'DELETE' });
+      showToast('Pending deal deleted.', 'success');
+      closePendingDealDrawer();
+      await fetchPendingDeals();
+    } catch (e) {
+      showToast('Failed to delete pending deal.', 'error');
+    }
+  });
+}

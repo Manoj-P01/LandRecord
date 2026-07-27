@@ -682,6 +682,8 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
   font-size: 0.8rem;
   color: var(--text-muted);
 }
@@ -693,6 +695,32 @@ h1, h2, h3, h4, h5, h6 {
 .seller-name {
   color: var(--text-secondary);
   font-weight: 500;
+}
+.card-timestamps {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  border-top: 1px dashed rgba(255, 255, 255, 0.05);
+  padding-top: 8px;
+  margin-top: -4px;
+}
+.drawer-record-metadata {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
 }
 
 /* Empty State / Loading State Styling */
@@ -1796,6 +1824,167 @@ input:checked + .slider:before {
   border-color: rgba(99, 102, 241, 0.25);
   color: var(--primary);
   font-weight: 600;
+}
+
+/* -------------------------------------------------------------
+ * Selection Checkbox & Floating Sum Calculator Bar
+ * ------------------------------------------------------------- */
+.card-select-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+.card-select-label input[type="checkbox"] {
+  display: none;
+}
+.checkbox-custom {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--input-bg);
+  display: inline-block;
+  position: relative;
+  transition: all var(--transition-fast);
+}
+.card-select-label:hover .checkbox-custom {
+  border-color: var(--primary);
+}
+.card-select-label input[type="checkbox"]:checked + .checkbox-custom {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+.card-select-label input[type="checkbox"]:checked + .checkbox-custom::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.selected-card {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3) !important;
+  background: var(--primary-bg, rgba(59, 130, 246, 0.04)) !important;
+}
+
+.selection-summary-bar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 250;
+  width: 92%;
+  max-width: 900px;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--primary);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-md);
+  padding: 12px 20px;
+  transition: all var(--transition-normal);
+}
+
+.selection-summary-bar.hidden {
+  display: none !important;
+}
+
+.selection-summary-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.selection-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.selected-badge {
+  background: var(--primary);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+}
+
+.selection-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.selection-metrics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.selection-metrics .metric-pill {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 4px 10px;
+  border-radius: var(--radius-xs);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.selection-metrics .metric-pill strong {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .selection-summary-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .selection-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .card-footer > div {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .card-timestamps {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .drawer-record-metadata {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
 }
 
 
