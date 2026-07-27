@@ -413,6 +413,231 @@ if (logoutBtn) {
 
 
 
+// Initialize PDF.js worker if available
+if (window.pdfjsLib) {
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+function formatBytes(bytes, decimals = 1) {
+  if (!bytes || bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+/**
+ * Compress an Image File using HTML5 Canvas
+ */
+async function compressImage(file, maxDimension = 1600, quality = 0.75) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        // White background to handle transparent PNGs
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const mimeType = 'image/jpeg';
+        const dataUrl = canvas.toDataURL(mimeType, quality);
+
+        const head = `data:${mimeType};base64,`;
+        const base64Str = dataUrl.substring(head.length);
+        const compressedSizeBytes = Math.round((base64Str.length * 3) / 4);
+
+        if (compressedSizeBytes < file.size) {
+          resolve({
+            fileObj: null,
+            base64: dataUrl,
+            name: file.name.replace(/\.[^/.]+$/, "") + ".jpg",
+            originalSize: file.size,
+            compressedSize: compressedSizeBytes,
+            compressed: true
+          });
+        } else {
+          resolve({
+            fileObj: file,
+            base64: e.target.result,
+            name: file.name,
+            originalSize: file.size,
+            compressedSize: file.size,
+            compressed: false
+          });
+        }
+      };
+      img.onerror = () => {
+        resolve({ fileObj: file, base64: e.target.result, name: file.name, originalSize: file.size, compressedSize: file.size, compressed: false });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Compress a PDF File using pdf.js and pdf-lib
+ */
+async function compressPdf(file, scale = 1.5, quality = 0.75) {
+  if (!window.pdfjsLib || !window.PDFLib) {
+    console.warn('PDF compression libraries not loaded. Falling back to original PDF.');
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve({ fileObj: file, base64: e.target.result, name: file.name, originalSize: file.size, compressedSize: file.size, compressed: false });
+      reader.readAsDataURL(file);
+    });
+  }
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdfDoc = await loadingTask.promise;
+    const numPages = pdfDoc.numPages;
+
+    const newPdf = await window.PDFLib.PDFDocument.create();
+
+    for (let i = 1; i <= numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const viewport = page.getViewport({ scale: scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+      const imgDataUrl = canvas.toDataURL('image/jpeg', quality);
+      const imgBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
+      const embeddedImg = await newPdf.embedJpg(imgBytes);
+
+      const pdfPage = newPdf.addPage([viewport.width / scale, viewport.height / scale]);
+      pdfPage.drawImage(embeddedImg, {
+        x: 0,
+        y: 0,
+        width: viewport.width / scale,
+        height: viewport.height / scale
+      });
+    }
+
+    const pdfBytes = await newPdf.save({ useObjectStreams: true });
+
+    let binary = '';
+    const bytes = new Uint8Array(pdfBytes);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64Str = btoa(binary);
+    const dataUrl = `data:application/pdf;base64,${base64Str}`;
+
+    if (pdfBytes.byteLength < file.size) {
+      return {
+        fileObj: null,
+        base64: dataUrl,
+        name: file.name,
+        originalSize: file.size,
+        compressedSize: pdfBytes.byteLength,
+        compressed: true
+      };
+    } else {
+      const origBase64 = await new Promise(r => {
+        const fr = new FileReader();
+        fr.onload = e => r(e.target.result);
+        fr.readAsDataURL(file);
+      });
+      return {
+        fileObj: file,
+        base64: origBase64,
+        name: file.name,
+        originalSize: file.size,
+        compressedSize: file.size,
+        compressed: false
+      };
+    }
+  } catch (err) {
+    console.error('PDF compression error, falling back to original file:', err);
+    const origBase64 = await new Promise(r => {
+      const fr = new FileReader();
+      fr.onload = e => r(e.target.result);
+      fr.readAsDataURL(file);
+    });
+    return {
+      fileObj: file,
+      base64: origBase64,
+      name: file.name,
+      originalSize: file.size,
+      compressedSize: file.size,
+      compressed: false
+    };
+  }
+}
+
+/**
+ * Unified Process & Compress File (Image or PDF)
+ */
+async function processAndCompressFile(file) {
+  if (!file) return null;
+
+  showToast(`Compressing ${file.name}... Please wait`, 'info');
+
+  let result;
+  if (file.type.startsWith('image/')) {
+    result = await compressImage(file);
+  } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+    result = await compressPdf(file);
+  } else {
+    const origBase64 = await new Promise(r => {
+      const fr = new FileReader();
+      fr.onload = e => r(e.target.result);
+      fr.readAsDataURL(file);
+    });
+    result = {
+      fileObj: file,
+      base64: origBase64,
+      name: file.name,
+      originalSize: file.size,
+      compressedSize: file.size,
+      compressed: false
+    };
+  }
+
+  if (result.compressed && result.originalSize > result.compressedSize) {
+    const savedBytes = result.originalSize - result.compressedSize;
+    const savedPercent = Math.round((savedBytes / result.originalSize) * 100);
+    showToast(
+      `File Compressed: ${formatBytes(result.originalSize)} → ${formatBytes(result.compressedSize)} (${savedPercent}% saved)`,
+      'success'
+    );
+  } else {
+    showToast(`File loaded: ${formatBytes(file.size)}`, 'info');
+  }
+
+  return result;
+}
+
 // Upload file helper to Supabase Storage
 async function uploadFileToSupabase(fileData, pathPrefix) {
   if (!state.supabaseClient || !fileData || !fileData.base64) return null;
@@ -840,28 +1065,29 @@ function addPattaInputBlock(pattaNumber = '', isPattaTransferred = false, pattaN
     }
   });
 
-  fileInput.addEventListener('change', (e) => {
+  fileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (file.size > 15 * 1024 * 1024) {
-      showToast('File is too large. Maximum size is 15MB.', 'error');
+    if (file.size > 25 * 1024 * 1024) {
+      showToast('File is too large. Maximum size is 25MB.', 'error');
       fileInput.value = '';
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      block.pattaAttachmentData = {
-        name: file.name,
-        base64: evt.target.result
-      };
-      updatePattaBlockUI({
-        fileName: file.name,
-        fileUrl: URL.createObjectURL(file)
-      });
+    const compressedResult = await processAndCompressFile(file);
+    if (!compressedResult) return;
+
+    block.pattaAttachmentData = {
+      name: compressedResult.name,
+      base64: compressedResult.base64
     };
-    reader.readAsDataURL(file);
+
+    const previewUrl = compressedResult.fileObj ? URL.createObjectURL(compressedResult.fileObj) : compressedResult.base64;
+    updatePattaBlockUI({
+      fileName: compressedResult.name,
+      fileUrl: previewUrl
+    });
   });
 
   removeBtn.addEventListener('click', (e) => {
@@ -1165,6 +1391,61 @@ function updateAttachmentUI(type, attachmentObj) {
     viewLink.classList.add('hidden');
   }
 }
+
+// Setup listeners for main record attachment upload boxes (Deed, EC, FMB)
+document.addEventListener('DOMContentLoaded', () => {
+  ['document', 'ec', 'fmb'].forEach(type => {
+    const name = type.charAt(0).toUpperCase() + type.slice(1);
+    const area = document.getElementById(`area${name}`);
+    const input = document.getElementById(`file${name}`);
+    const removeBtn = document.querySelector(`.btn-remove-attachment[data-type="${type}"]`);
+
+    if (area && input) {
+      area.addEventListener('click', () => {
+        const docNumEl = document.getElementById('documentNumber');
+        const isEditable = docNumEl && !docNumEl.disabled;
+        if (isEditable) input.click();
+      });
+
+      input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (file.size > 25 * 1024 * 1024) {
+          showToast('File is too large. Maximum size is 25MB.', 'error');
+          input.value = '';
+          return;
+        }
+
+        const compressedResult = await processAndCompressFile(file);
+        if (!compressedResult) return;
+
+        tempAttachments[type] = {
+          name: compressedResult.name,
+          base64: compressedResult.base64
+        };
+
+        const previewUrl = compressedResult.fileObj ? URL.createObjectURL(compressedResult.fileObj) : compressedResult.base64;
+        updateAttachmentUI(type, {
+          fileName: compressedResult.name,
+          fileUrl: previewUrl
+        });
+      });
+    }
+
+    if (removeBtn) {
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const docNumEl = document.getElementById('documentNumber');
+        const isEditable = docNumEl && !docNumEl.disabled;
+        if (!isEditable) return;
+        tempAttachments[type] = { delete: true };
+        if (input) input.value = '';
+        updateAttachmentUI(type, null);
+      });
+    }
+  });
+});
 
 // -------------------------------------------------------------
 // Drawer Controller
@@ -3597,7 +3878,11 @@ if (areaNearbyFmb && fileNearbyFmb) {
   fileNearbyFmb.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (file) {
-      tempNearbyFmb = { fileName: file.name, fileObj: file, fileUrl: URL.createObjectURL(file) };
+      const compressedResult = await processAndCompressFile(file);
+      if (!compressedResult) return;
+
+      const previewUrl = compressedResult.fileObj ? URL.createObjectURL(compressedResult.fileObj) : compressedResult.base64;
+      tempNearbyFmb = { fileName: compressedResult.name, base64: compressedResult.base64, fileObj: compressedResult.fileObj, fileUrl: previewUrl };
       updateNearbyAttachmentUI('fmb', tempNearbyFmb);
     }
   });
@@ -3608,7 +3893,11 @@ if (areaMasterFmb && fileMasterFmb) {
   fileMasterFmb.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (file) {
-      tempMasterFmb = { fileName: file.name, fileObj: file, fileUrl: URL.createObjectURL(file) };
+      const compressedResult = await processAndCompressFile(file);
+      if (!compressedResult) return;
+
+      const previewUrl = compressedResult.fileObj ? URL.createObjectURL(compressedResult.fileObj) : compressedResult.base64;
+      tempMasterFmb = { fileName: compressedResult.name, base64: compressedResult.base64, fileObj: compressedResult.fileObj, fileUrl: previewUrl };
       updateNearbyAttachmentUI('masterFmb', tempMasterFmb);
     }
   });
@@ -4123,10 +4412,14 @@ function updatePendingAgreementUI(attObj) {
 
 if (areaPendingAgreement && filePendingAgreement) {
   areaPendingAgreement.addEventListener('click', () => filePendingAgreement.click());
-  filePendingAgreement.addEventListener('change', (e) => {
+  filePendingAgreement.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (file) {
-      tempPendingAgreement = { fileName: file.name, fileObj: file, fileUrl: URL.createObjectURL(file) };
+      const compressedResult = await processAndCompressFile(file);
+      if (!compressedResult) return;
+
+      const previewUrl = compressedResult.fileObj ? URL.createObjectURL(compressedResult.fileObj) : compressedResult.base64;
+      tempPendingAgreement = { fileName: compressedResult.name, base64: compressedResult.base64, fileObj: compressedResult.fileObj, fileUrl: previewUrl };
       updatePendingAgreementUI(tempPendingAgreement);
     }
   });
@@ -4468,10 +4761,10 @@ if (pendingDealForm) {
     }
 
     let agreementAttachment = tempPendingAgreement;
-    if (state.supabaseClient && tempPendingAgreement && tempPendingAgreement.fileObj) {
+    if (state.supabaseClient && tempPendingAgreement && (tempPendingAgreement.base64 || tempPendingAgreement.fileObj)) {
       const uploaded = await uploadFileToSupabase({
         name: tempPendingAgreement.fileName,
-        base64: tempPendingAgreement.fileUrl
+        base64: tempPendingAgreement.base64
       }, `agreement_${surveyNumber}`);
       if (uploaded) agreementAttachment = uploaded;
     }
