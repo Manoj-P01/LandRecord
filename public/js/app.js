@@ -2981,6 +2981,7 @@ if (navMasterSurveysBtn) {
     closeLeftNav();
     await fetchRecords();
     await fetchNearbyRecords();
+    await fetchPendingDeals();
     await fetchMasterSurveys();
   });
 }
@@ -4694,7 +4695,36 @@ function checkSubDivisionStatus(surveyNum, subDivName) {
     };
   }
 
-  // 2. Check in Nearby Land Records
+  // 2. Check in Deals Made (Pending Registry)
+  let foundInDeals = false;
+  let matchedDeal = null;
+  let totalDealCents = 0;
+  const dealPartySet = new Set();
+
+  for (const deal of (state.pendingDeals || [])) {
+    const dSurvey = (deal.surveyNumber || '').trim().toLowerCase();
+    const dSub = (deal.subDivision || '').trim().toLowerCase();
+    if (dSurvey === normSurvey && (dSub === normSub || (dSurvey + '/' + dSub) === normSurvey + '/' + normSub)) {
+      foundInDeals = true;
+      matchedDeal = deal;
+      if (deal.landSize && deal.landSize.value) {
+        totalDealCents += convertUnits(deal.landSize.value, deal.landSize.unit).cents;
+      }
+      if (deal.buyerName) dealPartySet.add(`Buyer: ${deal.buyerName}`);
+      if (deal.sellerName) dealPartySet.add(`Seller: ${deal.sellerName}`);
+    }
+  }
+
+  if (foundInDeals) {
+    return {
+      status: 'pending_deals',
+      record: matchedDeal,
+      recordedCents: totalDealCents,
+      ownerNames: Array.from(dealPartySet)
+    };
+  }
+
+  // 3. Check in Nearby Land Records
   let foundInNearby = false;
   let matchedNearbyRecord = null;
   let totalNearbyCents = 0;
@@ -4806,6 +4836,10 @@ function renderMasterSurveysView() {
       return subDivs.some(sd => {
         return checkSubDivisionStatus(ms.surveyNumber, sd.subDivision).status === 'my_lands';
       });
+    } else if (filter === 'pending_deals') {
+      return subDivs.some(sd => {
+        return checkSubDivisionStatus(ms.surveyNumber, sd.subDivision).status === 'pending_deals';
+      });
     } else if (filter === 'nearby_lands') {
       return subDivs.some(sd => {
         return checkSubDivisionStatus(ms.surveyNumber, sd.subDivision).status === 'nearby_lands';
@@ -4910,6 +4944,42 @@ function renderMasterSurveysView() {
             <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--text-secondary); gap: 8px; border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 6px;">
               ${ownerNamesStr ? `<span><strong>Owner(s):</strong> <span class="owner-chip doc-owner-chip" style="font-size: 0.7rem;">${escapeHtml(ownerNamesStr)}</span></span>` : ''}
               ${recSizeStr ? `<span><strong>My Land Size:</strong> <span style="color: var(--success); font-weight: 700;">${recSizeStr}</span></span>` : ''}
+              ${hasBalance ? `
+                <span style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #d97706; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">
+                  ⚠️ Balance Remaining: ${balanceSizeStr}
+                </span>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      } else if (matchRes.status === 'pending_deals') {
+        const deal = matchRes.record;
+        const dealStatusLabel = {
+          advance_paid: 'Advance Paid',
+          agreement_executed: 'Agreement Executed',
+          pending_registration: 'Registration Pending',
+          scheduled: 'Registration Scheduled'
+        }[deal ? deal.dealStatus : ''] || 'Deal Made';
+
+        const recCents = matchRes.recordedCents || 0;
+        const recSizeStr = recCents > 0 ? formatDualSize(recCents) : '';
+        const ownerNamesStr = matchRes.ownerNames && matchRes.ownerNames.length > 0 ? matchRes.ownerNames.join(', ') : '';
+        const balanceCents = masterCents > 0 ? (masterCents - recCents) : 0;
+        const hasBalance = masterCents > 0 && balanceCents > 0.01;
+        const balanceSizeStr = hasBalance ? formatDualSize(balanceCents) : '';
+
+        return `
+          <div class="sub-div-pill recorded-pending-deal" style="background: rgba(14, 165, 233, 0.06); border: 1px solid rgba(14, 165, 233, 0.35); padding: 10px 14px; border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">
+                Sub-div <strong>${escapeHtml(subName)}</strong>
+                ${masterSizeStr ? `<span style="font-size: 0.8rem; color: var(--primary); font-weight: 600; margin-left: 6px;">(${masterSizeStr})</span>` : ''}
+              </span>
+              <span class="type-tag" style="background: rgba(14, 165, 233, 0.2); color: #0284c7; font-size: 0.72rem; padding: 2px 8px; font-weight: 700;">📝 Deal Made (${dealStatusLabel})</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--text-secondary); gap: 8px; border-top: 1px dashed rgba(255,255,255,0.05); padding-top: 6px;">
+              ${ownerNamesStr ? `<span><strong>Parties:</strong> <span class="owner-chip" style="font-size: 0.7rem; background: rgba(14, 165, 233, 0.15); color: #0284c7;">${escapeHtml(ownerNamesStr)}</span></span>` : ''}
+              ${recSizeStr ? `<span><strong>Deal Size:</strong> <span style="color: #0284c7; font-weight: 700;">${recSizeStr}</span></span>` : ''}
               ${hasBalance ? `
                 <span style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); color: #d97706; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">
                   ⚠️ Balance Remaining: ${balanceSizeStr}
