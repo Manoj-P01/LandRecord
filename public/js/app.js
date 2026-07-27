@@ -4848,13 +4848,21 @@ function renderMasterSurveysView() {
       }
     });
 
-    const masterTotalStr = totalMasterCents > 0 ? formatSizeDisplay(getDisplayValue({ value: totalMasterCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+    const formatDualSize = (cents) => {
+      if (!cents || cents <= 0) return '';
+      const primaryStr = formatSizeDisplay(getDisplayValue({ value: cents, unit: 'cent' }, state.displayUnit), state.displayUnit);
+      if (state.displayUnit === 'are') return primaryStr;
+      const areStr = formatSizeDisplay(getDisplayValue({ value: cents, unit: 'cent' }, 'are'), 'are');
+      return `${primaryStr} (${areStr})`;
+    };
+
+    const masterTotalStr = totalMasterCents > 0 ? formatDualSize(totalMasterCents) : '';
 
     let pendingCountInSurvey = 0;
     const subDivsHtml = subDivs.map(sd => {
       const subName = sd.subDivision;
       const masterCents = sd.landSize && sd.landSize.value > 0 ? convertUnits(sd.landSize.value, sd.landSize.unit).cents : 0;
-      const masterSizeStr = masterCents > 0 ? formatSizeDisplay(getDisplayValue({ value: masterCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+      const masterSizeStr = masterCents > 0 ? formatDualSize(masterCents) : '';
 
       const matchRes = checkSubDivisionStatus(ms.surveyNumber, subName);
 
@@ -4884,11 +4892,11 @@ function renderMasterSurveysView() {
       } else if (matchRes.status === 'my_lands') {
         const docNo = matchRes.record ? matchRes.record.documentNumber : '';
         const recCents = matchRes.recordedCents || 0;
-        const recSizeStr = recCents > 0 ? formatSizeDisplay(getDisplayValue({ value: recCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+        const recSizeStr = recCents > 0 ? formatDualSize(recCents) : '';
         const ownerNamesStr = matchRes.ownerNames && matchRes.ownerNames.length > 0 ? matchRes.ownerNames.join(', ') : '';
         const balanceCents = masterCents > 0 ? (masterCents - recCents) : 0;
         const hasBalance = masterCents > 0 && balanceCents > 0.01;
-        const balanceSizeStr = hasBalance ? formatSizeDisplay(getDisplayValue({ value: balanceCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+        const balanceSizeStr = hasBalance ? formatDualSize(balanceCents) : '';
 
         return `
           <div class="sub-div-pill recorded-my-lands" style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.3); padding: 10px 14px; border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 6px;">
@@ -4912,11 +4920,11 @@ function renderMasterSurveysView() {
         `;
       } else {
         const recCents = matchRes.recordedCents || 0;
-        const recSizeStr = recCents > 0 ? formatSizeDisplay(getDisplayValue({ value: recCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+        const recSizeStr = recCents > 0 ? formatDualSize(recCents) : '';
         const ownerNamesStr = matchRes.ownerNames && matchRes.ownerNames.length > 0 ? matchRes.ownerNames.join(', ') : '';
         const balanceCents = masterCents > 0 ? (masterCents - recCents) : 0;
         const hasBalance = masterCents > 0 && balanceCents > 0.01;
-        const balanceSizeStr = hasBalance ? formatSizeDisplay(getDisplayValue({ value: balanceCents, unit: 'cent' }, state.displayUnit), state.displayUnit) : '';
+        const balanceSizeStr = hasBalance ? formatDualSize(balanceCents) : '';
 
         return `
           <div class="sub-div-pill recorded-nearby-lands" style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.3); padding: 10px 14px; border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 6px;">
@@ -5081,6 +5089,7 @@ function addSubDivisionRowInput(sdObj = null) {
         <option value="cent" ${unit === 'cent' ? 'selected' : ''}>Cent</option>
         <option value="sqft" ${unit === 'sqft' ? 'selected' : ''}>Sq Ft</option>
         <option value="acre" ${unit === 'acre' ? 'selected' : ''}>Acre</option>
+        <option value="are" ${unit === 'are' ? 'selected' : ''}>Are</option>
       </select>
     </div>
     <button type="button" class="remove-name-btn" aria-label="Remove Row">&times;</button>
