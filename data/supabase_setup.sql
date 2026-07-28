@@ -84,6 +84,8 @@ CREATE TABLE IF NOT EXISTS public.pending_land_deals (
     village TEXT,
     notes TEXT,
     attachments JSONB DEFAULT '{}'::jsonb,
+    parcels JSONB DEFAULT '[]'::jsonb,
+    pattas JSONB DEFAULT '[]'::jsonb,
     is_deleted BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -96,6 +98,8 @@ ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS partitions JSONB DEFAUL
 ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS deed_type TEXT DEFAULT 'sale_deed';
 ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false;
 ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE public.pending_land_deals ADD COLUMN IF NOT EXISTS parcels JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.pending_land_deals ADD COLUMN IF NOT EXISTS pattas JSONB DEFAULT '[]'::jsonb;
 
 -- 5. Create `master_survey_records` table for whole survey numbers & sub-divisions registry
 CREATE TABLE IF NOT EXISTS public.master_survey_records (

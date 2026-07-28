@@ -961,37 +961,40 @@
             </div>
           </div>
 
-          <!-- Row 4: Proposed Survey Number & Subdivision Number -->
-          <div class="form-row-half">
-            <div class="form-group">
-              <label for="pendingSurveyNumber">Proposed Survey Number <span class="required">*</span></label>
-              <input type="text" id="pendingSurveyNumber" placeholder="e.g. 182" required>
+          <!-- Target Pattas & Land Parcels (Hierarchical dynamic list) -->
+          <div class="form-group pattas-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label style="font-size: 1rem; font-weight: 700; color: var(--primary); margin-bottom: 0;">Target Patta Records & Land Parcels <span class="required">*</span></label>
             </div>
-            <div class="form-group">
-              <label for="pendingSubDivision">Subdivision Number</label>
-              <input type="text" id="pendingSubDivision" placeholder="e.g. 2A">
+            <span class="field-hint" style="margin-bottom: 12px; display: block; font-size: 0.78rem; color: var(--text-muted);">Add Patta numbers and their nested Survey & Subdivision land parcels for this purchase deal</span>
+            
+            <div id="pendingPattasContainer" style="display: flex; flex-direction: column; gap: 14px;">
+              <!-- Dynamically populated Patta Cards with nested parcels -->
+            </div>
+
+            <button type="button" id="addPendingPattaBtn" class="btn btn-outline-dashed" style="margin-top: 12px; font-weight: 600; width: 100%;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px;"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+              + Add Target Patta Record
+            </button>
+          </div>
+
+          <!-- Cumulative Size Conversion Preview -->
+          <div class="form-group cumulative-size-group">
+            <label>Total Cumulative Deal Land Size</label>
+            <div id="pendingTotalSizePreview" class="conversion-preview">
+              <div class="conversion-pill"><strong id="pendingTotalCents">0.00</strong> Cents</div>
+              <div class="conversion-pill"><strong id="pendingTotalSqft">0</strong> Sq Ft</div>
+              <div class="conversion-pill"><strong id="pendingTotalAcre">0.0000</strong> Acres</div>
+              <div class="conversion-pill"><strong id="pendingTotalAre">0.0000</strong> Ares</div>
             </div>
           </div>
 
-          <!-- Row 5: Agreed Land Size & Unit -->
-          <div class="form-row-half">
-            <div class="form-group">
-              <label for="pendingPattaNumber">Target Patta Number (Optional)</label>
-              <input type="text" id="pendingPattaNumber" placeholder="e.g. 740">
-            </div>
-            <div class="form-group">
-              <label for="pendingSizeValue">Agreed Land Size <span class="required">*</span></label>
-              <div style="display: flex; gap: 6px;">
-                <input type="number" id="pendingSizeValue" placeholder="Size" step="any" min="0.0001" required style="flex: 1;">
-                <select id="pendingSizeUnit" class="filter-select" style="width: 90px; height: 42px;">
-                  <option value="cent">Cent</option>
-                  <option value="sqft">Sq Ft</option>
-                  <option value="acre">Acre</option>
-                  <option value="are">Are</option>
-                </select>
-              </div>
-            </div>
-          </div>
+          <!-- Hidden fallbacks for legacy compatibility -->
+          <input type="hidden" id="pendingPattaNumber">
+          <input type="hidden" id="pendingSurveyNumber">
+          <input type="hidden" id="pendingSubDivision">
+          <input type="hidden" id="pendingSizeValue">
+          <input type="hidden" id="pendingSizeUnit" value="cent">
 
           <!-- Row 6: Agreement Date & Target Registration Date -->
           <div class="form-row-half">

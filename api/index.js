@@ -767,15 +767,55 @@ app.get('/api/pending-deals', (req, res) => {
 
 app.post('/api/pending-deals', (req, res) => {
   const deals = readPendingDealsLocal();
+  
+  let formattedPattas = [];
+  if (Array.isArray(req.body.pattas) && req.body.pattas.length > 0) {
+    formattedPattas = req.body.pattas.map(p => {
+      const parcels = Array.isArray(p.parcels) ? p.parcels.map(parcel => ({
+        surveyNumber: (parcel.surveyNumber || '').trim(),
+        subDivision: (parcel.subDivision || '').trim(),
+        landSize: {
+          value: parseFloat(parcel.landSize ? parcel.landSize.value : 0),
+          unit: (parcel.landSize ? parcel.landSize.unit : 'cent') || 'cent'
+        },
+        landType: (parcel.landType || 'dry').trim().toLowerCase()
+      })).filter(parcel => parcel.surveyNumber && parcel.landSize.value > 0) : [];
+
+      return {
+        pattaNumber: (p.pattaNumber || '').trim(),
+        parcels
+      };
+    }).filter(p => p.parcels.length > 0);
+  }
+
+  const rawParcels = Array.isArray(req.body.parcels) ? req.body.parcels : [];
+  let parcels = rawParcels.map(p => ({
+    surveyNumber: (p.surveyNumber || '').trim(),
+    subDivision: (p.subDivision || '').trim(),
+    landSize: {
+      value: parseFloat(p.landSize ? p.landSize.value : 0),
+      unit: (p.landSize ? p.landSize.unit : 'cent') || 'cent'
+    },
+    landType: (p.landType || 'dry').trim().toLowerCase()
+  })).filter(p => p.surveyNumber && p.landSize.value > 0);
+
+  if (formattedPattas.length > 0 && parcels.length === 0) {
+    formattedPattas.forEach(p => {
+      p.parcels.forEach(pr => parcels.push(pr));
+    });
+  }
+
   const newDeal = {
     id: Date.now().toString(),
     sellerName: Array.isArray(req.body.sellerName) ? req.body.sellerName : [req.body.sellerName || ''],
     buyerName: Array.isArray(req.body.buyerName) ? req.body.buyerName : [req.body.buyerName || ''],
-    surveyNumber: (req.body.surveyNumber || '').trim(),
-    subDivision: (req.body.subDivision || '').trim(),
-    pattaNumber: (req.body.pattaNumber || '').trim(),
-    landType: (req.body.landType || 'dry').trim().toLowerCase(),
+    surveyNumber: (req.body.surveyNumber || (parcels.length > 0 ? parcels[0].surveyNumber : '')).trim(),
+    subDivision: (req.body.subDivision || (parcels.length > 0 ? parcels[0].subDivision : '')).trim(),
+    pattaNumber: (req.body.pattaNumber || (formattedPattas.length > 0 ? formattedPattas.map(p => p.pattaNumber).filter(Boolean).join(', ') : '')).trim(),
+    landType: (req.body.landType || (parcels.length > 0 ? parcels[0].landType : 'dry')).trim().toLowerCase(),
     landSize: req.body.landSize || { value: 0, unit: 'cent' },
+    parcels: parcels,
+    pattas: formattedPattas.length > 0 ? formattedPattas : [{ pattaNumber: (req.body.pattaNumber || '').trim(), parcels }],
     dealStatus: req.body.dealStatus || 'agreement_executed',
     agreementDate: req.body.agreementDate || null,
     targetRegistrationDate: req.body.targetRegistrationDate || null,
@@ -812,6 +852,34 @@ app.put('/api/pending-deals/:id', (req, res) => {
   if (req.body.pattaNumber !== undefined) deal.pattaNumber = req.body.pattaNumber.trim();
   if (req.body.landType !== undefined) deal.landType = req.body.landType.trim().toLowerCase();
   if (req.body.landSize !== undefined) deal.landSize = req.body.landSize;
+
+  if (req.body.pattas !== undefined && Array.isArray(req.body.pattas)) {
+    deal.pattas = req.body.pattas.map(p => ({
+      pattaNumber: (p.pattaNumber || '').trim(),
+      parcels: Array.isArray(p.parcels) ? p.parcels.map(pr => ({
+        surveyNumber: (pr.surveyNumber || '').trim(),
+        subDivision: (pr.subDivision || '').trim(),
+        landSize: {
+          value: parseFloat(pr.landSize ? pr.landSize.value : 0),
+          unit: (pr.landSize ? pr.landSize.unit : 'cent') || 'cent'
+        },
+        landType: (pr.landType || 'dry').trim().toLowerCase()
+      })).filter(pr => pr.surveyNumber && pr.landSize.value > 0) : []
+    })).filter(p => p.parcels.length > 0);
+  }
+
+  if (req.body.parcels !== undefined && Array.isArray(req.body.parcels)) {
+    deal.parcels = req.body.parcels.map(p => ({
+      surveyNumber: (p.surveyNumber || '').trim(),
+      subDivision: (p.subDivision || '').trim(),
+      landSize: {
+        value: parseFloat(p.landSize ? p.landSize.value : 0),
+        unit: (p.landSize ? p.landSize.unit : 'cent') || 'cent'
+      },
+      landType: (p.landType || 'dry').trim().toLowerCase()
+    })).filter(p => p.surveyNumber && p.landSize.value > 0);
+  }
+
   if (req.body.dealStatus !== undefined) deal.dealStatus = req.body.dealStatus;
   if (req.body.agreementDate !== undefined) deal.agreementDate = req.body.agreementDate;
   if (req.body.targetRegistrationDate !== undefined) deal.targetRegistrationDate = req.body.targetRegistrationDate;
