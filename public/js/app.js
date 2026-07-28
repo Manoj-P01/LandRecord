@@ -5289,16 +5289,77 @@ function checkSubDivisionStatus(surveyNum, subDivName) {
   const dealPartySet = new Set();
 
   for (const deal of (state.pendingDeals || [])) {
-    const dSurvey = (deal.surveyNumber || '').trim().toLowerCase();
-    const dSub = (deal.subDivision || '').trim().toLowerCase();
-    if (dSurvey === normSurvey && (dSub === normSub || (dSurvey + '/' + dSub) === normSurvey + '/' + normSub)) {
-      foundInDeals = true;
-      matchedDeal = deal;
-      if (deal.landSize && deal.landSize.value) {
-        totalDealCents += convertUnits(deal.landSize.value, deal.landSize.unit).cents;
+    let dealMatchedThisSub = false;
+
+    const addParties = () => {
+      if (Array.isArray(deal.buyerName)) {
+        deal.buyerName.forEach(b => b && dealPartySet.add(`Buyer: ${b.trim()}`));
+      } else if (deal.buyerName) {
+        dealPartySet.add(`Buyer: ${deal.buyerName.trim()}`);
       }
-      if (deal.buyerName) dealPartySet.add(`Buyer: ${deal.buyerName}`);
-      if (deal.sellerName) dealPartySet.add(`Seller: ${deal.sellerName}`);
+      if (Array.isArray(deal.sellerName)) {
+        deal.sellerName.forEach(s => s && dealPartySet.add(`Seller: ${s.trim()}`));
+      } else if (deal.sellerName) {
+        dealPartySet.add(`Seller: ${deal.sellerName.trim()}`);
+      }
+    };
+
+    // Check pattas -> parcels inside deal
+    if (Array.isArray(deal.pattas) && deal.pattas.length > 0) {
+      for (const p of deal.pattas) {
+        if (Array.isArray(p.parcels) && p.parcels.length > 0) {
+          for (const parcel of p.parcels) {
+            const pSurvey = (parcel.surveyNumber || '').trim().toLowerCase();
+            const pSub = (parcel.subDivision || '').trim().toLowerCase();
+            if (pSurvey === normSurvey && (pSub === normSub || (pSurvey + '/' + pSub) === normSurvey + '/' + normSub)) {
+              foundInDeals = true;
+              matchedDeal = deal;
+              dealMatchedThisSub = true;
+              let pCents = (parcel.landSize && parcel.landSize.value) ? convertUnits(parcel.landSize.value, parcel.landSize.unit).cents : 0;
+              if (!pCents && deal.landSize && deal.landSize.value) {
+                pCents = convertUnits(deal.landSize.value, deal.landSize.unit).cents;
+              }
+              totalDealCents += pCents;
+            }
+          }
+        }
+      }
+    }
+
+    // Check direct parcels array if present
+    if (!dealMatchedThisSub && Array.isArray(deal.parcels) && deal.parcels.length > 0) {
+      for (const parcel of deal.parcels) {
+        const pSurvey = (parcel.surveyNumber || '').trim().toLowerCase();
+        const pSub = (parcel.subDivision || '').trim().toLowerCase();
+        if (pSurvey === normSurvey && (pSub === normSub || (pSurvey + '/' + pSub) === normSurvey + '/' + normSub)) {
+          foundInDeals = true;
+          matchedDeal = deal;
+          dealMatchedThisSub = true;
+          let pCents = (parcel.landSize && parcel.landSize.value) ? convertUnits(parcel.landSize.value, parcel.landSize.unit).cents : 0;
+          if (!pCents && deal.landSize && deal.landSize.value) {
+            pCents = convertUnits(deal.landSize.value, deal.landSize.unit).cents;
+          }
+          totalDealCents += pCents;
+        }
+      }
+    }
+
+    // Fallback to scalar surveyNumber & subDivision
+    if (!dealMatchedThisSub) {
+      const dSurvey = (deal.surveyNumber || '').trim().toLowerCase();
+      const dSub = (deal.subDivision || '').trim().toLowerCase();
+      if (dSurvey === normSurvey && (dSub === normSub || (dSurvey + '/' + dSub) === normSurvey + '/' + normSub)) {
+        foundInDeals = true;
+        matchedDeal = deal;
+        dealMatchedThisSub = true;
+        if (deal.landSize && deal.landSize.value) {
+          totalDealCents += convertUnits(deal.landSize.value, deal.landSize.unit).cents;
+        }
+      }
+    }
+
+    if (dealMatchedThisSub) {
+      addParties();
     }
   }
 
