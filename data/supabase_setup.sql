@@ -100,6 +100,8 @@ ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFA
 ALTER TABLE public.land_records ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE public.pending_land_deals ADD COLUMN IF NOT EXISTS parcels JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.pending_land_deals ADD COLUMN IF NOT EXISTS pattas JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.nearby_land_records ADD COLUMN IF NOT EXISTS land_value NUMERIC(15, 2) DEFAULT 0;
+ALTER TABLE public.nearby_land_records ADD COLUMN IF NOT EXISTS rate_per_cent NUMERIC(15, 2) DEFAULT 0;
 
 -- 5. Create `master_survey_records` table for whole survey numbers & sub-divisions registry
 CREATE TABLE IF NOT EXISTS public.master_survey_records (

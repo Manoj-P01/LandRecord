@@ -11,11 +11,14 @@ const state = {
   activeView: 'myLands', // 'myLands' | 'nearbyLands' | 'transferee'
   pattaFilter: 'all', // 'all' | 'transferred' | 'pending'
   landTypeFilter: 'all', // 'all' | 'wet' | 'dry' | 'residential' | 'commercial'
+  selectedLandTypes: new Set(),
   filterDeedType: 'all', // 'all' | 'sale_deed' | 'partition_deed' | 'gift_deed' | etc.
   nameFilter: 'all', // 'all' | '[name]'
+  selectedDocumentOwners: new Set(),
   sortBy: 'newest', // 'newest' | 'oldest' | 'size-desc' | 'size-asc' | 'survey'
   displayUnit: 'cent', // 'cent' | 'sqft' | 'acre'
   selectedItemCentsMap: {},
+  selectedItemValueMap: {},
   masterSurveys: [],
   masterSurveySearchQuery: '',
   masterSurveyFilterStatus: 'all', // 'all' | 'pending' | 'my_lands' | 'nearby_lands'
@@ -31,6 +34,7 @@ function updateSelectionSummary() {
   const sumSqft = document.getElementById('sumSqft');
   const sumAcre = document.getElementById('sumAcre');
   const sumAre = document.getElementById('sumAre');
+  const sumValue = document.getElementById('sumValue');
 
   if (!bar) return;
 
@@ -41,8 +45,10 @@ function updateSelectionSummary() {
   }
 
   let totalCents = 0;
+  let totalValue = 0;
   keys.forEach(k => {
     totalCents += state.selectedItemCentsMap[k] || 0;
+    totalValue += state.selectedItemValueMap[k] || 0;
   });
 
   const conversions = convertUnits(totalCents, 'cent');
@@ -52,6 +58,7 @@ function updateSelectionSummary() {
   if (sumSqft) sumSqft.innerText = formatSizeDisplay(conversions.sqft, 'sqft');
   if (sumAcre) sumAcre.innerText = formatSizeDisplay(conversions.acres, 'acre');
   if (sumAre) sumAre.innerText = formatSizeDisplay(conversions.ares, 'are');
+  if (sumValue) sumValue.innerText = `₹${totalValue.toLocaleString('en-IN')}`;
 
   bar.classList.remove('hidden');
 }
@@ -59,14 +66,17 @@ function updateSelectionSummary() {
 function handleLandCheckboxChange(cb) {
   const key = cb.dataset.key;
   const cents = parseFloat(cb.dataset.cents) || 0;
+  const val = parseFloat(cb.dataset.val) || 0;
   if (!key) return;
 
   const card = cb.closest('.land-card, .record-card, tr');
   if (cb.checked) {
     state.selectedItemCentsMap[key] = cents;
+    state.selectedItemValueMap[key] = val;
     if (card) card.classList.add('selected-card');
   } else {
     delete state.selectedItemCentsMap[key];
+    delete state.selectedItemValueMap[key];
     if (card) card.classList.remove('selected-card');
   }
   updateSelectionSummary();
@@ -74,6 +84,7 @@ function handleLandCheckboxChange(cb) {
 
 function clearAllSelections() {
   state.selectedItemCentsMap = {};
+  state.selectedItemValueMap = {};
   document.querySelectorAll('.land-select-checkbox, .partition-select-checkbox').forEach(cb => {
     cb.checked = false;
     const card = cb.closest('.land-card, .record-card, tr');
@@ -87,8 +98,10 @@ function selectAllVisibleItems() {
     cb.checked = true;
     const key = cb.dataset.key;
     const cents = parseFloat(cb.dataset.cents) || 0;
+    const val = parseFloat(cb.dataset.val) || 0;
     if (key) {
       state.selectedItemCentsMap[key] = cents;
+      state.selectedItemValueMap[key] = val;
     }
     const card = cb.closest('.land-card, .record-card, tr');
     if (card) card.classList.add('selected-card');
@@ -96,12 +109,347 @@ function selectAllVisibleItems() {
   updateSelectionSummary();
 }
 
+function exportSelectedCsv() {
+  const selectedKeys = Object.keys(state.selectedItemCentsMap);
+  if (selectedKeys.length === 0) {
+    showToast('No land records selected for export.', 'error');
+    return;
+  }
+
+  const selectedIds = new Set(selectedKeys.map(k => k.replace(/^rec_/, '')));
+  const selectedRecords = state.records.filter(r => selectedIds.has(String(r.id)));
+
+  if (selectedRecords.length === 0) {
+    showToast('No matching records found for selection.', 'error');
+    return;
+  }
+
+  const headers = ['ID', 'Survey Number', 'Sub Division', 'Patta Number', 'Document Number', 'Document Owner Name', 'Land Type', 'District', 'SRO', 'Village', 'Patta Transferred', 'Patta Owners', 'Parcels', 'Size Value', 'Size Unit', 'Size in Cent', 'Size in SqFt', 'Size in Acre', 'Purchase Date', 'Notes'];
+  const csvRows = [headers.join(',')];
+
+  selectedRecords.forEach(r => {
+    const conv = convertUnits(r.landSize.value, r.landSize.unit);
+    const docOwnersStr = Array.isArray(r.documentOwnerName) ? r.documentOwnerName.join(', ') : (r.documentOwnerName || '');
+    const row = [
+      r.id,
+      `"${r.surveyNumber.replace(/"/g, '""')}"`,
+      `"${(r.subDivision || '').replace(/"/g, '""')}"`,
+      `"${r.pattaNumber.replace(/"/g, '""')}"`,
+      `"${r.documentNumber.replace(/"/g, '""')}"`,
+      `"${docOwnersStr.replace(/"/g, '""')}"`,
+      `"${(r.landType || 'dry').replace(/"/g, '""')}"`,
+      `"${(r.district || '').replace(/"/g, '""')}"`,
+      `"${(r.sro || '').replace(/"/g, '""')}"`,
+      `"${(r.village || '').replace(/"/g, '""')}"`,
+      r.isPattaTransferred ? 'Yes' : 'No',
+      `"${(r.pattaNames || []).join(', ').replace(/"/g, '""')}"`,
+      `""`,
+      r.landSize.value,
+      r.landSize.unit,
+      conv.cents.toFixed(4),
+      conv.sqft.toFixed(2),
+      conv.acres.toFixed(6),
+      r.purchaseDate ? r.purchaseDate.split('T')[0] : '',
+      `"${(r.notes || '').replace(/"/g, '""')}"`
+    ];
+    csvRows.push(row.join(','));
+  });
+
+  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `selected_land_records_${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast(`Exported ${selectedRecords.length} selected record(s) to CSV.`, 'success');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const clearBtn = document.getElementById('clearSelectionBtn');
   const selectAllBtn = document.getElementById('selectAllBtn');
+  const exportSelectedBtn = document.getElementById('exportSelectedCsvBtn');
   if (clearBtn) clearBtn.addEventListener('click', clearAllSelections);
   if (selectAllBtn) selectAllBtn.addEventListener('click', selectAllVisibleItems);
+  if (exportSelectedBtn) exportSelectedBtn.addEventListener('click', exportSelectedCsv);
+
+  initMultiSelectDropdowns();
 });
+
+// -------------------------------------------------------------
+// Multi-Select Checkbox Dropdown Controller
+// -------------------------------------------------------------
+function initMultiSelectDropdowns() {
+  const landTypeContainer = document.getElementById('landTypeMultiSelect');
+  const landTypeBtn = document.getElementById('landTypeMultiSelectBtn');
+  const landTypeDropdown = document.getElementById('landTypeDropdown');
+  const landTypeBtnText = document.getElementById('landTypeBtnText');
+  const landTypeBadge = document.getElementById('landTypeBadge');
+  const landTypeSelectAll = document.getElementById('landTypeSelectAllBtn');
+  const landTypeClearAll = document.getElementById('landTypeClearAllBtn');
+
+  const docOwnersContainer = document.getElementById('docOwnersMultiSelect');
+  const docOwnersBtn = document.getElementById('docOwnersMultiSelectBtn');
+  const docOwnersDropdown = document.getElementById('docOwnersDropdown');
+  const docOwnersSearch = document.getElementById('docOwnersSearchInput');
+  const docOwnersSelectAll = document.getElementById('docOwnersSelectAllBtn');
+  const docOwnersClearAll = document.getElementById('docOwnersClearAllBtn');
+
+  // Toggle Land Type Dropdown
+  if (landTypeBtn) {
+    landTypeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (docOwnersContainer) docOwnersContainer.classList.remove('open');
+      if (landTypeContainer) landTypeContainer.classList.toggle('open');
+    });
+  }
+
+  // Toggle Document Owners Dropdown
+  if (docOwnersBtn) {
+    docOwnersBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (landTypeContainer) landTypeContainer.classList.remove('open');
+      if (docOwnersContainer) docOwnersContainer.classList.toggle('open');
+    });
+  }
+
+  // Close dropdowns on outside click
+  document.addEventListener('click', (e) => {
+    if (landTypeContainer && !landTypeContainer.contains(e.target)) {
+      landTypeContainer.classList.remove('open');
+    }
+    if (docOwnersContainer && !docOwnersContainer.contains(e.target)) {
+      docOwnersContainer.classList.remove('open');
+    }
+  });
+
+  if (landTypeDropdown) landTypeDropdown.addEventListener('click', (e) => e.stopPropagation());
+  if (docOwnersDropdown) docOwnersDropdown.addEventListener('click', (e) => e.stopPropagation());
+
+  // Land Type Checkboxes
+  const updateLandTypeUI = () => {
+    const cbs = document.querySelectorAll('.land-type-cb');
+    state.selectedLandTypes = new Set();
+    cbs.forEach(cb => {
+      if (cb.checked) state.selectedLandTypes.add(cb.value);
+    });
+
+    const count = state.selectedLandTypes.size;
+    if (count === 0 || count === cbs.length) {
+      if (landTypeBtnText) landTypeBtnText.innerText = 'All Land Types';
+      if (landTypeBadge) landTypeBadge.classList.add('hidden');
+    } else {
+      const typeLabels = { wet: 'Wet', dry: 'Dry', residential: 'Residential', commercial: 'Commercial', well: 'Well' };
+      const selectedNames = Array.from(state.selectedLandTypes).map(t => typeLabels[t] || t);
+      if (landTypeBtnText) landTypeBtnText.innerText = selectedNames.join(', ');
+      if (landTypeBadge) {
+        landTypeBadge.innerText = count;
+        landTypeBadge.classList.remove('hidden');
+      }
+    }
+    renderRecordsList();
+  };
+
+  document.querySelectorAll('.land-type-cb').forEach(cb => {
+    cb.addEventListener('change', updateLandTypeUI);
+  });
+
+  if (landTypeSelectAll) {
+    landTypeSelectAll.addEventListener('click', () => {
+      document.querySelectorAll('.land-type-cb').forEach(cb => cb.checked = true);
+      updateLandTypeUI();
+    });
+  }
+
+  if (landTypeClearAll) {
+    landTypeClearAll.addEventListener('click', () => {
+      document.querySelectorAll('.land-type-cb').forEach(cb => cb.checked = false);
+      updateLandTypeUI();
+    });
+  }
+
+  // Document Owners Search
+  if (docOwnersSearch) {
+    docOwnersSearch.addEventListener('input', () => {
+      const q = docOwnersSearch.value.toLowerCase();
+      document.querySelectorAll('.doc-owner-cb-option').forEach(opt => {
+        const text = opt.textContent.toLowerCase();
+        opt.style.display = text.includes(q) ? 'flex' : 'none';
+      });
+    });
+  }
+
+  if (docOwnersSelectAll) {
+    docOwnersSelectAll.addEventListener('click', () => {
+      document.querySelectorAll('.doc-owner-cb').forEach(cb => cb.checked = true);
+      updateDocOwnersUI();
+    });
+  }
+
+  if (docOwnersClearAll) {
+    docOwnersClearAll.addEventListener('click', () => {
+      document.querySelectorAll('.doc-owner-cb').forEach(cb => cb.checked = false);
+      updateDocOwnersUI();
+    });
+  }
+}
+
+function updateDocOwnersOptionsList() {
+  const container = document.getElementById('docOwnersOptionsList');
+  if (!container) return;
+
+  const ownersSet = new Set();
+  (state.records || []).forEach(r => {
+    if (Array.isArray(r.documentOwnerName)) {
+      r.documentOwnerName.forEach(name => name && name.trim() && ownersSet.add(name.trim()));
+    } else if (r.documentOwnerName && typeof r.documentOwnerName === 'string') {
+      ownersSet.add(r.documentOwnerName.trim());
+    }
+  });
+
+  const ownersArr = Array.from(ownersSet).sort((a, b) => a.localeCompare(b));
+
+  if (ownersArr.length === 0) {
+    container.innerHTML = `<span style="font-size: 0.78rem; color: var(--text-muted); padding: 6px;">No document owners recorded yet.</span>`;
+    return;
+  }
+
+  container.innerHTML = ownersArr.map(owner => {
+    const isChecked = state.selectedDocumentOwners && state.selectedDocumentOwners.has(owner);
+    return `
+      <label class="multiselect-option doc-owner-cb-option">
+        <input type="checkbox" value="${escapeHtml(owner)}" class="doc-owner-cb" ${isChecked ? 'checked' : ''}>
+        <span>${escapeHtml(owner)}</span>
+      </label>
+    `;
+  }).join('');
+
+  document.querySelectorAll('.doc-owner-cb').forEach(cb => {
+    cb.addEventListener('change', updateDocOwnersUI);
+  });
+}
+
+function updateDocOwnersUI() {
+  const docOwnersBtnText = document.getElementById('docOwnersBtnText');
+  const docOwnersBadge = document.getElementById('docOwnersBadge');
+
+  const cbs = document.querySelectorAll('.doc-owner-cb');
+  state.selectedDocumentOwners = new Set();
+  cbs.forEach(cb => {
+    if (cb.checked) state.selectedDocumentOwners.add(cb.value);
+  });
+
+  const count = state.selectedDocumentOwners.size;
+  if (count === 0 || count === cbs.length) {
+    if (docOwnersBtnText) docOwnersBtnText.innerText = 'All Document Owners';
+    if (docOwnersBadge) docOwnersBadge.classList.add('hidden');
+  } else {
+    const selectedArr = Array.from(state.selectedDocumentOwners);
+    if (docOwnersBtnText) docOwnersBtnText.innerText = selectedArr.join(', ');
+    if (docOwnersBadge) {
+      docOwnersBadge.innerText = count;
+      docOwnersBadge.classList.remove('hidden');
+    }
+  }
+  renderRecordsList();
+}
+
+// -------------------------------------------------------------
+// Whole Survey Valuation Aggregator
+// -------------------------------------------------------------
+function calculateWholeSurveyValuation(surveyNumber) {
+  const normSurvey = (surveyNumber || '').trim().toLowerCase();
+  let myLandsValue = 0;
+  let myLandsCents = 0;
+  let nearbyLandsValue = 0;
+  let nearbyLandsCents = 0;
+  let pendingDealsValue = 0;
+  let pendingDealsCents = 0;
+
+  // 1. My Lands
+  for (const r of state.records) {
+    if (Array.isArray(r.pattas)) {
+      for (const p of r.pattas) {
+        if (Array.isArray(p.parcels)) {
+          for (const parcel of p.parcels) {
+            const pSurvey = (parcel.surveyNumber || '').trim().toLowerCase();
+            if (pSurvey === normSurvey) {
+              const c = convertUnits(parcel.landSize ? parcel.landSize.value : 0, parcel.landSize ? parcel.landSize.unit : 'cent').cents;
+              myLandsCents += c;
+              const val = parseFloat(parcel.landValue || r.landValue || 0) || 0;
+              myLandsValue += val;
+            }
+          }
+        }
+      }
+    } else {
+      const rSurvey = (r.surveyNumber || '').trim().toLowerCase();
+      if (rSurvey === normSurvey) {
+        const c = convertUnits(r.landSize ? r.landSize.value : 0, r.landSize ? r.landSize.unit : 'cent').cents;
+        myLandsCents += c;
+        myLandsValue += parseFloat(r.landValue || 0) || 0;
+      }
+    }
+  }
+
+  // 2. Nearby Lands
+  for (const nr of state.nearbyRecords) {
+    const nSurvey = (nr.surveyNumber || '').trim().toLowerCase();
+    if (nSurvey === normSurvey) {
+      const c = convertUnits(nr.landSize ? nr.landSize.value : 0, nr.landSize ? nr.landSize.unit : 'cent').cents;
+      nearbyLandsCents += c;
+      nearbyLandsValue += parseFloat(nr.landValue || nr.marketValue || 0) || 0;
+    }
+  }
+
+  // 3. Deals Made (Pending Registration)
+  for (const deal of (state.pendingDeals || [])) {
+    let matched = false;
+    let dealCentsForSurvey = 0;
+    if (Array.isArray(deal.pattas)) {
+      for (const p of deal.pattas) {
+        if (Array.isArray(p.parcels)) {
+          for (const parcel of p.parcels) {
+            const pSurvey = (parcel.surveyNumber || '').trim().toLowerCase();
+            if (pSurvey === normSurvey) {
+              matched = true;
+              dealCentsForSurvey += convertUnits(parcel.landSize ? parcel.landSize.value : 0, parcel.landSize ? parcel.landSize.unit : 'cent').cents;
+            }
+          }
+        }
+      }
+    }
+    if (!matched) {
+      const dSurvey = (deal.surveyNumber || '').trim().toLowerCase();
+      if (dSurvey === normSurvey) {
+        matched = true;
+        dealCentsForSurvey = convertUnits(deal.landSize ? deal.landSize.value : 0, deal.landSize ? deal.landSize.unit : 'cent').cents;
+      }
+    }
+    if (matched) {
+      pendingDealsCents += dealCentsForSurvey;
+      pendingDealsValue += parseFloat(deal.totalPrice || 0) || 0;
+    }
+  }
+
+  const totalSurveyValue = myLandsValue + nearbyLandsValue + pendingDealsValue;
+  const totalSurveyCents = myLandsCents + nearbyLandsCents + pendingDealsCents;
+  const avgRatePerCent = totalSurveyCents > 0 ? (totalSurveyValue / totalSurveyCents) : 0;
+
+  return {
+    myLandsValue,
+    myLandsCents,
+    nearbyLandsValue,
+    nearbyLandsCents,
+    pendingDealsValue,
+    pendingDealsCents,
+    totalSurveyValue,
+    totalSurveyCents,
+    avgRatePerCent
+  };
+}
 
 function isValidFileUrl(url) {
   if (!url || typeof url !== 'string') return false;
@@ -2249,9 +2597,12 @@ async function fetchRecords() {
 }
 
 function populateOwnerFilter() {
+  updateDocOwnersOptionsList();
+
+  const filterName = document.getElementById('filterName');
+  if (!filterName) return;
+
   const selectedValue = filterName.value || 'all';
-  
-  // Extract all unique present document owner names
   const ownersSet = new Set();
   state.records.forEach(record => {
     if (Array.isArray(record.documentOwnerName)) {
@@ -2262,11 +2613,8 @@ function populateOwnerFilter() {
   });
 
   const uniqueOwners = Array.from(ownersSet).sort((a, b) => a.localeCompare(b));
-
-  // Reset dropdown list
   filterName.innerHTML = '<option value="all">All Document Owners</option>';
 
-  // Append new options
   uniqueOwners.forEach(owner => {
     const opt = document.createElement('option');
     opt.value = owner;
@@ -2274,7 +2622,6 @@ function populateOwnerFilter() {
     filterName.appendChild(opt);
   });
 
-  // Restore previous selection if it still exists
   if (ownersSet.has(selectedValue)) {
     filterName.value = selectedValue;
     state.nameFilter = selectedValue;
@@ -2282,6 +2629,10 @@ function populateOwnerFilter() {
     filterName.value = 'all';
     state.nameFilter = 'all';
   }
+}
+
+function populateDocumentOwnerOptions() {
+  populateOwnerFilter();
 }
 
 function updateDashboard(recordsList = state.records) {
@@ -2332,6 +2683,82 @@ function updateDashboard(recordsList = state.records) {
   statPattaTransferred.innerText = `${transferredCount} / ${count}`;
   const pct = count > 0 ? Math.round((transferredCount / count) * 100) : 0;
   statPattaPercentage.innerText = `${pct}% Transferred`;
+
+  updateOwnerLandSizePanel();
+}
+
+function calculateOwnerLandSizes() {
+  const ownerMap = {}; // ownerName -> totalCents
+
+  (state.records || []).forEach(r => {
+    let cents = 0;
+    if (Array.isArray(r.pattas) && r.pattas.length > 0) {
+      r.pattas.forEach(p => {
+        if (Array.isArray(p.parcels)) {
+          p.parcels.forEach(parcel => {
+            cents += convertUnits(parcel.landSize ? parcel.landSize.value : 0, parcel.landSize ? parcel.landSize.unit : 'cent').cents;
+          });
+        }
+      });
+    }
+    if (!cents && r.landSize && r.landSize.value) {
+      cents = convertUnits(r.landSize.value, r.landSize.unit).cents;
+    }
+
+    let owners = [];
+    if (Array.isArray(r.documentOwnerName)) {
+      owners = r.documentOwnerName.map(n => n && n.trim()).filter(Boolean);
+    } else if (r.documentOwnerName && typeof r.documentOwnerName === 'string') {
+      owners = [r.documentOwnerName.trim()];
+    }
+
+    if (owners.length === 0) {
+      owners = ['Unspecified Owner'];
+    }
+
+    // "if any land owned by multiple owner consider as one"
+    // Divide parcel size equally among joint owners so total land size across all owners equals exact actual land size!
+    const shareCents = cents / owners.length;
+    owners.forEach(name => {
+      ownerMap[name] = (ownerMap[name] || 0) + shareCents;
+    });
+  });
+
+  return ownerMap;
+}
+
+function updateOwnerLandSizePanel() {
+  const container = document.getElementById('ownerLandSizeContainer');
+  if (!container) return;
+
+  const ownerMap = calculateOwnerLandSizes();
+  const owners = Object.keys(ownerMap).sort((a, b) => ownerMap[b] - ownerMap[a]);
+
+  if (owners.length === 0) {
+    container.innerHTML = `<span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">No owner records found.</span>`;
+    return;
+  }
+
+  container.innerHTML = owners.map(owner => {
+    const cents = ownerMap[owner];
+    const conv = convertUnits(cents, 'cent');
+    const centStr = formatSizeDisplay(conv.cents, 'cent');
+    const acreStr = formatSizeDisplay(conv.acres, 'acre');
+    const sqftStr = formatSizeDisplay(conv.sqft, 'sqft');
+    const areStr = formatSizeDisplay(conv.ares, 'are');
+
+    return `
+      <div class="owner-land-size-pill" style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 0.88rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-heading);">${escapeHtml(owner)}</span>
+        </div>
+        <div style="font-size: 0.8rem; font-weight: 600; color: var(--primary); text-align: right;">
+          <div>${centStr} <span style="font-size: 0.75rem; color: var(--text-muted);">(${acreStr})</span></div>
+          <div style="font-size: 0.74rem; color: var(--text-secondary); font-weight: 500;">${sqftStr} (${areStr})</div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 // -------------------------------------------------------------
@@ -2390,8 +2817,22 @@ function getFilteredAndSortedRecords() {
       if (state.pattaFilter === 'transferred' && !record.isPattaTransferred) return false;
       if (state.pattaFilter === 'pending' && record.isPattaTransferred) return false;
 
-      // 2b. Land Type Filter
-      if (state.landTypeFilter !== 'all') {
+      // 2b. Land Type Filter (Support Multi-Select Checkboxes)
+      if (state.selectedLandTypes && state.selectedLandTypes.size > 0) {
+        let hasMatchingType = false;
+        if (Array.isArray(record.pattas) && record.pattas.length > 0) {
+          record.pattas.forEach(p => {
+            if (Array.isArray(p.parcels)) {
+              p.parcels.forEach(parcel => {
+                if (state.selectedLandTypes.has(parcel.landType || 'dry')) hasMatchingType = true;
+              });
+            }
+          });
+        } else if (state.selectedLandTypes.has(record.landType || 'dry')) {
+          hasMatchingType = true;
+        }
+        if (!hasMatchingType) return false;
+      } else if (state.landTypeFilter !== 'all') {
         let hasMatchingType = false;
         if (Array.isArray(record.pattas)) {
           record.pattas.forEach(p => {
@@ -2401,12 +2842,26 @@ function getFilteredAndSortedRecords() {
               });
             }
           });
+        } else if ((record.landType || 'dry') === state.landTypeFilter) {
+          hasMatchingType = true;
         }
         if (!hasMatchingType) return false;
       }
 
-      // 2c. Owner Name Filter
-      if (state.nameFilter !== 'all' && !(Array.isArray(record.documentOwnerName) && record.documentOwnerName.includes(state.nameFilter))) return false;
+      // 2c. Owner Name Filter (Support Multi-Select Checkboxes)
+      if (state.selectedDocumentOwners && state.selectedDocumentOwners.size > 0) {
+        let hasMatchingOwner = false;
+        if (Array.isArray(record.documentOwnerName)) {
+          record.documentOwnerName.forEach(name => {
+            if (name && state.selectedDocumentOwners.has(name.trim())) hasMatchingOwner = true;
+          });
+        } else if (record.documentOwnerName && state.selectedDocumentOwners.has(record.documentOwnerName.trim())) {
+          hasMatchingOwner = true;
+        }
+        if (!hasMatchingOwner) return false;
+      } else if (state.nameFilter !== 'all' && !(Array.isArray(record.documentOwnerName) && record.documentOwnerName.includes(state.nameFilter))) {
+        return false;
+      }
 
       return true;
     })
@@ -2827,20 +3282,26 @@ clearSearchBtn.addEventListener('click', () => {
   renderRecordsList();
 });
 
-filterPatta.addEventListener('change', () => {
-  state.pattaFilter = filterPatta.value;
-  renderRecordsList();
-});
+if (filterPatta) {
+  filterPatta.addEventListener('change', () => {
+    state.pattaFilter = filterPatta.value;
+    renderRecordsList();
+  });
+}
 
-filterType.addEventListener('change', () => {
-  state.landTypeFilter = filterType.value;
-  renderRecordsList();
-});
+if (filterType) {
+  filterType.addEventListener('change', () => {
+    state.landTypeFilter = filterType.value;
+    renderRecordsList();
+  });
+}
 
-filterName.addEventListener('change', () => {
-  state.nameFilter = filterName.value;
-  renderRecordsList();
-});
+if (filterName) {
+  filterName.addEventListener('change', () => {
+    state.nameFilter = filterName.value;
+    renderRecordsList();
+  });
+}
 
 const filterDeedType = document.getElementById('filterDeedType');
 if (filterDeedType) {
@@ -3816,6 +4277,8 @@ function openNearbyDrawer(record = null) {
   document.getElementById('nearbyLandType').value = record ? (record.landType || 'dry') : 'dry';
   document.getElementById('nearbySizeValue').value = record && record.landSize ? record.landSize.value : '';
   document.getElementById('nearbySizeUnit').value = record && record.landSize ? record.landSize.unit : 'cent';
+  document.getElementById('nearbyLandValue').value = record && record.landValue ? record.landValue : (record && record.marketValue ? record.marketValue : '');
+  document.getElementById('nearbyRatePerCent').value = record && record.ratePerCent ? record.ratePerCent : '';
   document.getElementById('nearbyNotes').value = record ? (record.notes || '') : '';
 
   if (nearbyOwnersContainer) {
@@ -3951,6 +4414,8 @@ async function fetchNearbyRecords() {
         pattaNames: typeof r.patta_names === 'string' ? JSON.parse(r.patta_names) : (r.patta_names || []),
         landType: r.land_type || 'dry',
         landSize: typeof r.land_size === 'string' ? JSON.parse(r.land_size) : (r.land_size || { value: 0, unit: 'cent' }),
+        landValue: parseFloat(r.land_value || r.landValue || r.market_value || r.marketValue || 0) || 0,
+        ratePerCent: parseFloat(r.rate_per_cent || r.ratePerCent || 0) || 0,
         direction: r.direction || 'Surrounding Survey',
         notes: r.notes || '',
         attachments: typeof r.attachments === 'string' ? JSON.parse(r.attachments) : (r.attachments || {}),
@@ -4139,7 +4604,16 @@ if (nearbyLandForm) {
     const landType = document.getElementById('nearbyLandType').value;
     const sizeVal = parseFloat(document.getElementById('nearbySizeValue').value) || 0;
     const sizeUnit = document.getElementById('nearbySizeUnit').value;
+    let landValue = parseFloat(document.getElementById('nearbyLandValue').value) || 0;
+    let ratePerCent = parseFloat(document.getElementById('nearbyRatePerCent').value) || 0;
     const notes = document.getElementById('nearbyNotes').value.trim();
+
+    const sizeCents = convertUnits(sizeVal, sizeUnit).cents;
+    if (ratePerCent > 0 && !landValue && sizeCents > 0) {
+      landValue = parseFloat((sizeCents * ratePerCent).toFixed(2));
+    } else if (landValue > 0 && !ratePerCent && sizeCents > 0) {
+      ratePerCent = parseFloat((landValue / sizeCents).toFixed(2));
+    }
 
     // Gather non-empty patta owner names
     const pattaNames = [];
@@ -4197,6 +4671,8 @@ if (nearbyLandForm) {
         patta_names: pattaNames,
         land_type: landType,
         land_size: { value: sizeVal, unit: sizeUnit },
+        land_value: landValue,
+        rate_per_cent: ratePerCent,
         direction,
         notes,
         attachments: {
@@ -5540,6 +6016,36 @@ function renderMasterSurveysView() {
 
     const masterTotalStr = totalMasterCents > 0 ? formatDualSize(totalMasterCents) : '';
 
+    const valRes = calculateWholeSurveyValuation(ms.surveyNumber);
+    const hasValuation = valRes.totalSurveyValue > 0;
+    const valTotalFormatted = valRes.totalSurveyValue > 0 ? `₹${valRes.totalSurveyValue.toLocaleString('en-IN')}` : '₹0 (No rates entered)';
+    const avgRateStr = valRes.avgRatePerCent > 0 ? `₹${Math.round(valRes.avgRatePerCent).toLocaleString('en-IN')}/Cent` : '';
+
+    let combinedSurveyCents = 0;
+    subDivs.forEach(sd => {
+      const matchRes = checkSubDivisionStatus(ms.surveyNumber, sd.subDivision);
+      const masterC = (sd.landSize && sd.landSize.value > 0) ? convertUnits(sd.landSize.value, sd.landSize.unit).cents : 0;
+      const recC = matchRes.recordedCents || 0;
+      combinedSurveyCents += Math.max(masterC, recC);
+    });
+
+    if (combinedSurveyCents === 0 && valRes.totalSurveyCents > 0) {
+      combinedSurveyCents = valRes.totalSurveyCents;
+    }
+
+    const formatSurveyTotalAreaLabel = (cents) => {
+      if (!cents || cents <= 0) return '';
+      const conv = convertUnits(cents, 'cent');
+      const centStr = formatSizeDisplay(conv.cents, 'cent');
+      const acreStr = formatSizeDisplay(conv.acres, 'acre');
+      const sqftStr = formatSizeDisplay(conv.sqft, 'sqft');
+      const areStr = formatSizeDisplay(conv.ares, 'are');
+
+      return `${centStr} (${acreStr}) | ${sqftStr} (${areStr})`;
+    };
+
+    const combinedTotalAreaStr = combinedSurveyCents > 0 ? formatSurveyTotalAreaLabel(combinedSurveyCents) : masterTotalStr;
+
     let pendingCountInSurvey = 0;
     const subDivsHtml = subDivs.map(sd => {
       const subName = sd.subDivision;
@@ -5689,9 +6195,30 @@ function renderMasterSurveysView() {
         </div>
       </div>
 
+      <!-- Whole Survey Valuation Summary Banner -->
+      ${hasValuation ? `
+      <div class="survey-valuation-banner" style="margin-top: 12px;">
+        <div class="valuation-header">
+          <div class="valuation-title-group">
+            <svg class="valuation-trophy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <div>
+              <div style="font-size: 0.72rem; text-transform: uppercase; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px;">Survey No. ${escapeHtml(ms.surveyNumber)} Total Valuation</div>
+              <div class="valuation-total-amount">${valTotalFormatted}</div>
+            </div>
+          </div>
+          ${avgRateStr ? `<div class="val-pill avg-rate">Avg Rate: <strong>${avgRateStr}</strong></div>` : ''}
+        </div>
+        <div class="valuation-breakdown-row">
+          ${valRes.myLandsValue > 0 ? `<div class="val-pill my-land">My Land: <strong>₹${valRes.myLandsValue.toLocaleString('en-IN')}</strong> (${valRes.myLandsCents.toFixed(2)} Cents)</div>` : ''}
+          ${valRes.nearbyLandsValue > 0 ? `<div class="val-pill nearby-land">Nearby Land: <strong>₹${valRes.nearbyLandsValue.toLocaleString('en-IN')}</strong> (${valRes.nearbyLandsCents.toFixed(2)} Cents)</div>` : ''}
+          ${valRes.pendingDealsValue > 0 ? `<div class="val-pill pending-deal">Deals Made: <strong>₹${valRes.pendingDealsValue.toLocaleString('en-IN')}</strong> (${valRes.pendingDealsCents.toFixed(2)} Cents)</div>` : ''}
+        </div>
+      </div>
+      ` : ''}
+
       <div class="form-group" style="margin-top: 12px;">
         <label style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em;">
-          Sub-divisions (${subDivs.length} total ${masterTotalStr ? `| Total Area: ${masterTotalStr}` : ''})
+          Sub-divisions (${subDivs.length} total ${combinedTotalAreaStr ? `| Total Area: ${combinedTotalAreaStr}` : ''})
         </label>
         <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
           ${subDivsHtml || '<span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">No sub-divisions registered.</span>'}
